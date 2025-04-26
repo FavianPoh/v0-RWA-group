@@ -11,7 +11,7 @@ const modules = [
   {
     id: "creditreview",
     name: "Credit Review",
-    description: "Rating-Based PD",
+    description: "Rating-Based PD Assessment",
     color: "#8b5cf6",
     order: 3,
     optional: true,
@@ -24,26 +24,96 @@ const modules = [
   { id: "rwa", name: "RWA", description: "Risk-Weighted Assets", color: "#ef4444", order: 9 },
 ]
 
-// Define connections with explicit source and target points
+// Update the connections array to include a method to determine if a connection is affected by modified modules
 const connections = [
-  { from: "pd", to: "ttcpd", label: "Input", sourcePoint: "right", targetPoint: "left" },
-  { from: "ttcpd", to: "correlation", label: "Input", sourcePoint: "bottom", targetPoint: "top" },
-  { from: "ttcpd", to: "maturity", label: "Input", sourcePoint: "bottom", targetPoint: "top" },
-  { from: "creditreview", to: "rwa", label: "Optional Input", dashed: true, sourcePoint: "bottom", targetPoint: "top" },
-  { from: "avc", to: "correlation", label: "Multiplier", sourcePoint: "right", targetPoint: "left" },
-  { from: "correlation", to: "rwa", label: "Input", sourcePoint: "bottom", targetPoint: "top" },
-  { from: "lgd", to: "rwa", label: "Input", sourcePoint: "bottom", targetPoint: "top" },
-  { from: "ead", to: "rwa", label: "Input", sourcePoint: "bottom", targetPoint: "top" },
-  { from: "maturity", to: "rwa", label: "Input", sourcePoint: "bottom", targetPoint: "top" },
+  {
+    from: "pd",
+    to: "ttcpd",
+    label: "Input",
+    path: { type: "straight", offsetY: 0 },
+  },
+  {
+    from: "ttcpd",
+    to: "correlation",
+    label: "Input",
+    path: { type: "straight", offsetY: 0 },
+  },
+  {
+    from: "avc",
+    to: "correlation",
+    label: "Multiplier",
+    path: { type: "straight", offsetY: 0 },
+  },
+  {
+    from: "ttcpd",
+    to: "maturity",
+    label: "Input",
+    path: { type: "angled", startSide: "bottom", endSide: "top" },
+  },
+  {
+    from: "creditreview",
+    to: "rwa",
+    label: "Optional Input",
+    dashed: true,
+    path: { type: "curved", startSide: "bottom", endSide: "top", controlPointOffset: 100 },
+  },
+  {
+    from: "correlation",
+    to: "rwa",
+    label: "Input",
+    path: { type: "angled", startSide: "bottom", endSide: "top" },
+  },
+  {
+    from: "lgd",
+    to: "rwa",
+    label: "Input",
+    path: { type: "angled", startSide: "bottom", endSide: "top" },
+  },
+  {
+    from: "ead",
+    to: "rwa",
+    label: "Input",
+    path: { type: "angled", startSide: "bottom", endSide: "right" },
+  },
+  {
+    from: "maturity",
+    to: "rwa",
+    label: "Input",
+    path: { type: "angled", startSide: "bottom", endSide: "left" },
+  },
 ]
 
-export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview }) {
+// Add a function to determine if a module is affected by modified modules
+function isAffectedByModifiedModules(moduleId, modifiedModules) {
+  // If the module itself is modified, it's affected
+  if (modifiedModules.includes(moduleId)) return true
+
+  // Check if any upstream module is modified
+  const upstreamModules = getUpstreamModules(moduleId)
+  return upstreamModules.some((module) => modifiedModules.includes(module))
+}
+
+// Function to get all upstream modules that feed into a given module
+function getUpstreamModules(moduleId) {
+  const upstream = []
+  connections.forEach((connection) => {
+    if (connection.to === moduleId) {
+      upstream.push(connection.from)
+      // Recursively get upstream modules
+      const furtherUpstream = getUpstreamModules(connection.from)
+      upstream.push(...furtherUpstream)
+    }
+  })
+  return [...new Set(upstream)] // Remove duplicates
+}
+
+export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview, modifiedModules = [] }) {
   const containerRef = useRef(null)
   const [lines, setLines] = useState([])
   const moduleRefs = useRef({})
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
 
-  // Define fixed positions for each module
+  // Define fixed positions for each module to match the image layout
   const modulePositions = {
     pd: { x: 50, y: 50 },
     ttcpd: { x: 250, y: 50 },
@@ -53,7 +123,7 @@ export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview 
     lgd: { x: 450, y: 200 },
     ead: { x: 50, y: 350 },
     maturity: { x: 250, y: 350 },
-    rwa: { x: 450, y: 500 },
+    rwa: { x: 250, y: 500 }, // Centered at the bottom
   }
 
   // Get connection points based on the specified side
@@ -92,6 +162,7 @@ export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview 
     }
   }, [])
 
+  // Update the calculateLines function to add affected status to connections
   useEffect(() => {
     if (!containerRef.current || containerSize.width === 0) return
 
@@ -107,9 +178,35 @@ export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview 
           const toRect = toModule.getBoundingClientRect()
           const containerRect = containerRef.current.getBoundingClientRect()
 
+          // Determine connection sides based on module positions
+          let fromSide, toSide
+
+          if (connection.path.type === "straight") {
+            // For horizontal connections
+            if (fromRect.left < toRect.left) {
+              fromSide = "right"
+              toSide = "left"
+            } else {
+              fromSide = "left"
+              toSide = "right"
+            }
+          } else if (connection.path.startSide && connection.path.endSide) {
+            fromSide = connection.path.startSide
+            toSide = connection.path.endSide
+          } else {
+            // Default for vertical or diagonal connections
+            if (fromRect.top < toRect.top) {
+              fromSide = "bottom"
+              toSide = "top"
+            } else {
+              fromSide = "top"
+              toSide = "bottom"
+            }
+          }
+
           // Get connection points based on specified sides
-          const fromPoint = getConnectionPoint(fromRect, connection.sourcePoint)
-          const toPoint = getConnectionPoint(toRect, connection.targetPoint)
+          const fromPoint = getConnectionPoint(fromRect, fromSide)
+          const toPoint = getConnectionPoint(toRect, toSide)
 
           // Adjust for container position
           const fromX = fromPoint.x - containerRect.left
@@ -117,46 +214,89 @@ export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview 
           const toX = toPoint.x - containerRect.left
           const toY = toPoint.y - containerRect.top
 
-          // Calculate control points for the curve
-          let controlPoints
-          if (connection.sourcePoint === "bottom" && connection.targetPoint === "top") {
-            // Vertical connection
-            const midY = (fromY + toY) / 2
-            controlPoints = {
-              cp1x: fromX,
-              cp1y: midY,
-              cp2x: toX,
-              cp2y: midY,
+          // Calculate path based on connection type
+          let path
+
+          if (connection.path.type === "straight") {
+            // Simple straight line
+            path = `M${fromX},${fromY} L${toX},${toY}`
+          } else if (connection.path.type === "angled") {
+            // Angled path with right angles
+            if (fromSide === "bottom" && toSide === "top") {
+              const midY = (fromY + toY) / 2
+              path = `M${fromX},${fromY} L${fromX},${midY} L${toX},${midY} L${toX},${toY}`
+            } else if (fromSide === "right" && toSide === "left") {
+              const midX = (fromX + toX) / 2
+              path = `M${fromX},${fromY} L${midX},${fromY} L${midX},${toY} L${toX},${toY}`
+            } else if (fromSide === "bottom" && toSide === "right") {
+              path = `M${fromX},${fromY} L${fromX},${toY} L${toX},${toY}`
+            } else if (fromSide === "bottom" && toSide === "left") {
+              path = `M${fromX},${fromY} L${fromX},${toY} L${toX},${toY}`
+            } else {
+              // Default angled path
+              const midY = (fromY + toY) / 2
+              path = `M${fromX},${fromY} L${fromX},${midY} L${toX},${midY} L${toX},${toY}`
             }
-          } else if (connection.sourcePoint === "right" && connection.targetPoint === "left") {
-            // Horizontal connection
-            const midX = (fromX + toX) / 2
-            controlPoints = {
-              cp1x: midX,
-              cp1y: fromY,
-              cp2x: midX,
-              cp2y: toY,
-            }
-          } else {
-            // Diagonal or other connections
-            controlPoints = {
-              cp1x: fromX + (toX - fromX) * 0.5,
-              cp1y: fromY,
-              cp2x: toX - (toX - fromX) * 0.5,
-              cp2y: toY,
+          } else if (connection.path.type === "curved") {
+            // Curved path with control points
+            const offset = connection.path.controlPointOffset || 50
+
+            if (fromSide === "bottom" && toSide === "top") {
+              // Vertical curve
+              path = `M${fromX},${fromY} C${fromX},${fromY + offset} ${toX},${toY - offset} ${toX},${toY}`
+            } else if (fromSide === "right" && toSide === "left") {
+              // Horizontal curve
+              path = `M${fromX},${fromY} C${fromX + offset},${fromY} ${toX - offset},${toY} ${toX},${toY}`
+            } else {
+              // Diagonal curve
+              path = `M${fromX},${fromY} C${fromX},${fromY + offset} ${toX},${toY - offset} ${toX},${toY}`
             }
           }
+
+          // Calculate label position
+          let labelX, labelY
+
+          if (connection.path.type === "straight") {
+            labelX = (fromX + toX) / 2
+            labelY = (fromY + toY) / 2 - 10
+          } else if (connection.path.type === "angled") {
+            if (fromSide === "bottom" && toSide === "top") {
+              const midY = (fromY + toY) / 2
+              labelX = (fromX + toX) / 2
+              labelY = midY - 10
+            } else if (fromSide === "right" && toSide === "left") {
+              const midX = (fromX + toX) / 2
+              labelX = midX
+              labelY = (fromY + toY) / 2 - 10
+            } else {
+              // Default label position
+              labelX = (fromX + toX) / 2
+              labelY = (fromY + toY) / 2 - 10
+            }
+          } else {
+            // Curved path label
+            labelX = (fromX + toX) / 2
+            labelY = (fromY + toY) / 2 - 20
+          }
+
+          // Check if this connection is affected by modified modules
+          const isFromModified = modifiedModules.includes(connection.from)
+          const isToAffected = isAffectedByModifiedModules(connection.to, modifiedModules)
+          const isAffected = isFromModified && isToAffected
 
           return {
             fromX,
             fromY,
             toX,
             toY,
-            controlPoints,
+            path,
+            labelX,
+            labelY,
             fromModule: connection.from,
             toModule: connection.to,
             label: connection.label,
             dashed: connection.dashed,
+            isAffected,
           }
         })
         .filter(Boolean)
@@ -167,11 +307,26 @@ export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview 
     // Use a small delay to ensure all modules are rendered
     const timer = setTimeout(calculateLines, 100)
     return () => clearTimeout(timer)
-  }, [containerSize])
+  }, [containerSize, modifiedModules])
 
   const getModuleValue = (moduleId) => {
     if (!results) return "N/A"
 
+    // Only show adjustment information for the RWA module
+    if (moduleId === "rwa") {
+      const finalRwa = results.rwa
+      const hasAdjustment = results.hasAdjustment || results.hasPortfolioAdjustment || results.originalRwa
+
+      if (hasAdjustment) {
+        const originalRwa = results.originalRwa || results.rwa
+        const adjustmentPercentage = (finalRwa / originalRwa - 1) * 100
+        return `$${Math.round(finalRwa).toLocaleString()} (${adjustmentPercentage >= 0 ? "+" : ""}${adjustmentPercentage.toFixed(1)}%)`
+      }
+
+      return `$${Math.round(finalRwa).toLocaleString()}`
+    }
+
+    // For all other modules, show the regular value without adjustment info
     switch (moduleId) {
       case "pd":
         return `${(data.pd * 100).toFixed(2)}%`
@@ -189,13 +344,17 @@ export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview 
         return `${(results.correlation * 100).toFixed(2)}%`
       case "maturity":
         return results.maturityAdjustment.toFixed(4)
-      case "rwa":
-        return `$${Math.round(results.rwa).toLocaleString()}`
       default:
         return "N/A"
     }
   }
 
+  // Check if a module has been modified
+  const isModified = (moduleId) => {
+    return modifiedModules.includes(moduleId)
+  }
+
+  // Update the SVG rendering to show different colors for affected connections
   return (
     <div
       className="relative w-full h-[700px] overflow-auto bg-slate-50 dark:bg-slate-900 rounded-lg p-4"
@@ -206,21 +365,21 @@ export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview 
           <g key={index}>
             <defs>
               <marker id={`arrowhead-${index}`} markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+                <polygon points="0 0, 10 3.5, 0 7" fill={line.isAffected ? "#f59e0b" : "#94a3b8"} />
               </marker>
             </defs>
             <path
-              d={`M${line.fromX},${line.fromY} C${line.controlPoints.cp1x},${line.controlPoints.cp1y} ${line.controlPoints.cp2x},${line.controlPoints.cp2y} ${line.toX},${line.toY}`}
-              stroke="#94a3b8"
-              strokeWidth="2"
+              d={line.path}
+              stroke={line.isAffected ? "#f59e0b" : "#94a3b8"}
+              strokeWidth={line.isAffected ? "3" : "2"}
               fill="none"
               strokeDasharray={line.dashed ? "5,5" : "none"}
               markerEnd={`url(#arrowhead-${index})`}
             />
             {/* Add label to the connection with background */}
             <rect
-              x={(line.fromX + line.toX) / 2 - 40}
-              y={(line.fromY + line.toY) / 2 - 20}
+              x={line.labelX - 40}
+              y={line.labelY - 10}
               width="80"
               height="20"
               rx="4"
@@ -229,10 +388,10 @@ export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview 
               fillOpacity="0.8"
             />
             <text
-              x={(line.fromX + line.toX) / 2}
-              y={(line.fromY + line.toY) / 2 - 8}
+              x={line.labelX}
+              y={line.labelY}
               textAnchor="middle"
-              fill="#64748b"
+              fill={line.isAffected ? "#f59e0b" : "#64748b"}
               fontSize="12"
               dominantBaseline="middle"
             >
@@ -261,6 +420,9 @@ export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview 
               onClick={() => onModuleSelect(module.id)}
               optional={module.optional}
               onAction={module.id === "creditreview" ? onCreditReview : undefined}
+              isModified={isModified(module.id)}
+              // Only show adjustment indicator for RWA module
+              hasAdjustment={module.id === "rwa" && (results.hasAdjustment || results.hasPortfolioAdjustment)}
             />
           </div>
         )
@@ -269,11 +431,29 @@ export function ModuleFlowchart({ data, results, onModuleSelect, onCreditReview 
   )
 }
 
-const ModuleCard = ({ module, value, onClick, className, optional, onAction, ...props }) => {
+// Find the ModuleCard component and enhance it to show adjustment indicators
+
+const ModuleCard = ({ module, value, onClick, className, optional, onAction, isModified, hasAdjustment, ...props }) => {
+  // Extract the RWA value and potential adjustment information
+  const isRwaModule = module.id === "rwa"
+  const showAdjustment = isRwaModule && hasAdjustment && value.includes("(")
+
+  // If it's an RWA value with an adjustment, split it
+  let rwaValue = value
+  let adjustmentInfo = null
+
+  if (showAdjustment) {
+    const parts = value.split(" (")
+    rwaValue = parts[0]
+    adjustmentInfo = parts[1].replace(")", "")
+  }
+
   return (
     <Card
       className={`p-4 cursor-pointer hover:shadow-md transition-shadow border-l-4 ${className} ${
         optional ? "border-dashed" : ""
+      } ${isModified ? "ring-2 ring-amber-400 dark:ring-amber-600" : ""} ${
+        showAdjustment ? "border-b-4 border-b-purple-500 dark:border-b-purple-600" : ""
       }`}
       style={{ borderLeftColor: module.color }}
       onClick={onClick}
@@ -281,9 +461,34 @@ const ModuleCard = ({ module, value, onClick, className, optional, onAction, ...
     >
       <div className="flex justify-between items-start">
         <div>
-          <div className="font-medium">{module.name}</div>
+          <div className="font-medium">
+            {module.name}
+            {isModified && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                Modified
+              </span>
+            )}
+          </div>
           <div className="text-sm text-muted-foreground">{module.description}</div>
-          <div className="mt-2 text-xl font-bold">{value}</div>
+          <div className="mt-2 text-xl font-bold">
+            {showAdjustment ? (
+              <>
+                {rwaValue}
+                <span
+                  className={`ml-1 text-sm font-medium ${
+                    adjustmentInfo.startsWith("+") ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  ({adjustmentInfo})
+                </span>
+              </>
+            ) : (
+              value
+            )}
+          </div>
+          {showAdjustment && (
+            <div className="mt-1 text-xs text-purple-600 dark:text-purple-400">Includes adjustment</div>
+          )}
         </div>
         {optional && onAction && (
           <Button
