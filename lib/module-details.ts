@@ -1,24 +1,30 @@
+export type ModuleType = "input" | "calculation" | "output"
+
 import { getRatingFromPd } from "./credit-ratings"
 
 export function getModuleDetails(moduleId, data, results) {
+  // Ensure data and results are objects to prevent null reference errors
+  const safeData = data || {}
+  const safeResults = results || {}
+
   if (moduleId === "pd") {
-    return getPDModuleDetails(data)
+    return getPDModuleDetails(safeData)
   } else if (moduleId === "ttcpd") {
-    return getTtcPDModuleDetails(data)
+    return getTtcPDModuleDetails(safeData)
   } else if (moduleId === "creditreview") {
-    return getCreditReviewModuleDetails(data)
+    return getCreditReviewModuleDetails(safeData)
   } else if (moduleId === "lgd") {
-    return getLGDModuleDetails(data)
+    return getLGDModuleDetails(safeData)
   } else if (moduleId === "ead") {
-    return getEADModuleDetails(data)
+    return getEADModuleDetails(safeData)
   } else if (moduleId === "correlation") {
-    return getCorrelationModuleDetails(data, results)
+    return getCorrelationModuleDetails(safeData, safeResults)
   } else if (moduleId === "maturity") {
-    return getMaturityModuleDetails(data, results)
+    return getMaturityModuleDetails(safeData, safeResults)
   } else if (moduleId === "avc") {
-    return getAVCModuleDetails(data, results)
+    return getAVCModuleDetails(safeData, safeResults)
   } else if (moduleId === "rwa") {
-    return getRWAModuleDetails(data, results)
+    return getRWAModuleDetails(safeData, safeResults)
   } else {
     return null
   }
@@ -30,8 +36,14 @@ function getPDModuleDetails(data) {
     description:
       "Calculates the probability that a counterparty will default within a one-year period based on current conditions",
     overview:
-      "<p>The Point-in-Time (PIT) Probability of Default (PD) is a key risk metric that estimates the likelihood that a counterparty will default on its obligations within a one-year period based on current economic conditions.</p><p>PIT PD is influenced by various factors including the counterparty's financial health, industry conditions, and current macroeconomic factors.</p>",
-    formula: "PIT PD = P(Asset Value < Default Threshold | Current Economic Conditions)",
+      "<p>The Point-in-Time (PIT) Probability of Default (PD) represents the likelihood of a counterparty defaulting within the next 12 months, considering current economic conditions.</p><p>This module uses financial data, market indicators, and current economic conditions to estimate default probability.</p>",
+    formula: "PIT PD = f(Financial Ratios, Market Indicators, Current Economic Conditions)",
+    keyConsiderations: [
+      "PIT PD reflects current economic conditions and is more volatile than TTC PD",
+      "Higher values indicate greater default risk",
+      "Typically ranges from 0.01% (very safe) to 20%+ (distressed)",
+      "Used as input to the TTC PD calculation",
+    ],
     inputs: [
       {
         name: "Financial Statements",
@@ -40,7 +52,7 @@ function getPDModuleDetails(data) {
       },
       {
         name: "Industry Risk",
-        value: data.industry,
+        value: data.industry || "Unknown",
         description: "Industry-specific risk factors",
       },
       {
@@ -50,13 +62,13 @@ function getPDModuleDetails(data) {
       },
       {
         name: "Current Economic Conditions",
-        value: "Index: " + data.macroeconomicIndex.toFixed(2),
+        value: data.macroeconomicIndex ? data.macroeconomicIndex.toFixed(2) : "N/A",
         rawValue: data.macroeconomicIndex,
         description: "Current state of the economy (higher values indicate stronger economy)",
       },
       {
         name: "PD",
-        value: (data.pd * 100).toFixed(4) + "%",
+        value: data.pd ? (data.pd * 100).toFixed(4) + "%" : "N/A",
         rawValue: data.pd,
         description: "Point-in-Time Probability of Default",
       },
@@ -64,12 +76,12 @@ function getPDModuleDetails(data) {
     outputs: [
       {
         name: "PIT PD",
-        value: (data.pd * 100).toFixed(4) + "%",
+        value: data.pd ? (data.pd * 100).toFixed(4) + "%" : "N/A",
         description: "Point-in-Time Probability of Default over a one-year period",
       },
       {
         name: "Equivalent Rating",
-        value: getRatingFromPd(data.pd),
+        value: data.pd ? getRatingFromPd(data.pd) : "N/A",
         description: "Approximate credit rating equivalent to this PD",
       },
     ],
@@ -90,36 +102,42 @@ function getTtcPDModuleDetails(data) {
     title: "Through-The-Cycle (TTC) Probability of Default Calculator",
     description: "Calculates the probability of default adjusted for economic cycles",
     overview:
-      "<p>The Through-The-Cycle (TTC) Probability of Default represents the average default probability of a counterparty over an entire economic cycle, rather than at a specific point in time.</p><p>TTC PD is calculated by adjusting the Point-in-Time (PIT) PD to account for the current position in the economic cycle.</p>",
-    formula: "TTC PD = PIT PD × Adjustment Factor + (Long-Term Average × Weight)",
+      "<p>The Through-The-Cycle (TTC) PD adjusts the Point-in-Time PD to account for economic cycles, providing a more stable, long-term view of default risk.</p><p>This module normalizes the PD by considering where we are in the economic cycle and how cyclical the industry is.</p>",
+    formula: "TTC PD = PIT PD × (1 + (0.5 - Economic Index) × Cyclicality × 2) × 0.7 + Long-Term Average × 0.3",
+    keyConsiderations: [
+      "TTC PD is higher than PIT PD during economic booms (when Economic Index > 0.5)",
+      "TTC PD is lower than PIT PD during economic downturns (when Economic Index < 0.5)",
+      "More cyclical industries (higher Cyclicality) experience greater adjustment",
+      "The final value is blended with the long-term industry average for stability",
+    ],
     inputs: [
       {
         name: "Point-in-Time PD",
-        value: (data.pd * 100).toFixed(4) + "%",
+        value: data.pd ? (data.pd * 100).toFixed(4) + "%" : "N/A",
         rawValue: data.pd,
         description: "Current PD based on present economic conditions",
       },
       {
         name: "Economic Index",
-        value: data.macroeconomicIndex.toFixed(2),
+        value: data.macroeconomicIndex ? data.macroeconomicIndex.toFixed(2) : "N/A",
         rawValue: data.macroeconomicIndex,
         description: "Current position in the economic cycle (0-1, where 1 is strong economy)",
       },
       {
         name: "Long-Term Average Default Rate",
-        value: (data.longTermAverage * 100).toFixed(2) + "%",
+        value: data.longTermAverage ? (data.longTermAverage * 100).toFixed(2) + "%" : "N/A",
         rawValue: data.longTermAverage,
         description: "Historical average default rate for this industry/sector",
       },
       {
         name: "Cyclicality",
-        value: data.cyclicality.toFixed(2),
+        value: data.cyclicality ? data.cyclicality.toFixed(2) : "N/A",
         rawValue: data.cyclicality,
         description: "How sensitive the industry is to economic cycles (0-1)",
       },
       {
         name: "TTC PD",
-        value: (data.ttcPd * 100).toFixed(4) + "%",
+        value: data.ttcPd ? (data.ttcPd * 100).toFixed(4) + "%" : "N/A",
         rawValue: data.ttcPd,
         description: "Through-The-Cycle Probability of Default",
       },
@@ -127,17 +145,20 @@ function getTtcPDModuleDetails(data) {
     outputs: [
       {
         name: "TTC PD",
-        value: (data.ttcPd * 100).toFixed(4) + "%",
+        value: data.ttcPd ? (data.ttcPd * 100).toFixed(4) + "%" : "N/A",
         description: "Through-The-Cycle Probability of Default",
       },
       {
         name: "Adjustment Factor",
-        value: (1 + (0.5 - data.macroeconomicIndex) * data.cyclicality * 2).toFixed(4),
+        value:
+          data.macroeconomicIndex && data.cyclicality
+            ? (1 + (0.5 - data.macroeconomicIndex) * data.cyclicality * 2).toFixed(4)
+            : "N/A",
         description: "Factor applied to PIT PD to adjust for economic cycle",
       },
       {
         name: "Equivalent Rating",
-        value: getRatingFromPd(data.ttcPd),
+        value: data.ttcPd ? getRatingFromPd(data.ttcPd) : "N/A",
         description: "Approximate credit rating equivalent to this TTC PD",
       },
     ],
@@ -150,22 +171,28 @@ function getCreditReviewModuleDetails(data) {
     title: "Credit Review Module",
     description: "Assigns credit ratings and corresponding PDs based on expert judgment",
     overview:
-      "<p>The Credit Review module allows risk managers to assign credit ratings to counterparties based on expert judgment, qualitative assessments, and external ratings from agencies like S&P, Moody's, or Fitch.</p>",
-    formula: "Credit Rating → PD Mapping",
+      "<p>The Credit Review module allows risk managers to override model-calculated PDs with expert judgment by assigning a credit rating.</p><p>This module maps credit ratings (like AAA, AA, etc.) to standardized PD values based on historical default rates.</p>",
+    formula: "If Credit Rating is used: Final PD = Rating-Based PD\nOtherwise: Final PD = Model TTC PD",
+    keyConsiderations: [
+      "Credit ratings provide a standardized assessment of creditworthiness",
+      "Each rating corresponds to a specific probability of default based on historical data",
+      "Ratings can override model-calculated PDs when expert judgment is needed",
+      "The system allows choosing between rating-based PD and model-calculated TTC PD",
+    ],
     inputs: [
       {
         name: "Counterparty",
-        value: data.name,
+        value: data.name || "Unknown",
         description: "Entity being assessed",
       },
       {
         name: "Industry",
-        value: data.industry,
+        value: data.industry || "Unknown",
         description: "Counterparty's industry sector",
       },
       {
         name: "Model TTC PD",
-        value: (data.ttcPd * 100).toFixed(4) + "%",
+        value: data.ttcPd ? (data.ttcPd * 100).toFixed(4) + "%" : "N/A",
         rawValue: data.ttcPd,
         description: "PD calculated by the TTC model",
       },
@@ -207,17 +234,24 @@ function getLGDModuleDetails(data) {
     title: "Loss Given Default (LGD) Calculator",
     description: "Calculates the percentage of exposure expected to be lost if a default occurs",
     overview:
-      "<p>Loss Given Default (LGD) represents the proportion of the exposure that is expected to be lost if a default occurs. It is a key component in the calculation of expected loss and risk-weighted assets.</p>",
+      "<p>Loss Given Default (LGD) estimates the percentage of exposure that will not be recovered if a default occurs.</p><p>This module considers factors like collateral, seniority, and industry recovery rates to determine the expected loss severity.</p>",
     formula: "LGD = (1 - Recovery Rate) × 100%",
+    keyConsiderations: [
+      "LGD is expressed as a percentage of exposure",
+      "Lower LGD values indicate better recovery prospects",
+      "Collateralized exposures typically have lower LGD values",
+      "Senior claims have lower LGD than subordinated claims",
+      "Industry and jurisdiction affect recovery rates",
+    ],
     inputs: [
       {
         name: "Counterparty",
-        value: data.name,
+        value: data.name || "Unknown",
         description: "Entity being assessed",
       },
       {
         name: "Industry",
-        value: data.industry,
+        value: data.industry || "Unknown",
         description: "Counterparty's industry sector",
       },
       {
@@ -232,7 +266,7 @@ function getLGDModuleDetails(data) {
       },
       {
         name: "LGD",
-        value: (data.lgd * 100).toFixed(2) + "%",
+        value: data.lgd ? (data.lgd * 100).toFixed(2) + "%" : "N/A",
         rawValue: data.lgd,
         description: "Loss Given Default percentage",
       },
@@ -240,12 +274,12 @@ function getLGDModuleDetails(data) {
     outputs: [
       {
         name: "LGD",
-        value: (data.lgd * 100).toFixed(2) + "%",
+        value: data.lgd ? (data.lgd * 100).toFixed(2) + "%" : "N/A",
         description: "Loss Given Default percentage",
       },
       {
         name: "Recovery Rate",
-        value: ((1 - data.lgd) * 100).toFixed(2) + "%",
+        value: data.lgd ? ((1 - data.lgd) * 100).toFixed(2) + "%" : "N/A",
         description: "Expected recovery rate in case of default",
       },
     ],
@@ -258,22 +292,28 @@ function getEADModuleDetails(data) {
     title: "Exposure at Default (EAD) Calculator",
     description: "Calculates the expected exposure amount at the time of default",
     overview:
-      "<p>Exposure at Default (EAD) represents the expected amount of exposure to a counterparty at the time of default. It includes both on-balance sheet exposures and off-balance sheet items that may be drawn down before default occurs.</p>",
-    formula: "For on-balance sheet items:\nEAD = Current Outstanding Amount",
+      "<p>Exposure at Default (EAD) estimates the total exposure amount expected at the time of default.</p><p>This module calculates EAD by considering both current drawn amounts and potential future drawdowns of undrawn commitments.</p>",
+    formula: "EAD = Current Outstanding + (Undrawn Commitment × Credit Conversion Factor)",
+    keyConsiderations: [
+      "EAD includes both current drawn amounts and potential future drawdowns",
+      "Credit Conversion Factors (CCF) estimate how much of undrawn amounts will be drawn before default",
+      "Revolving facilities typically have higher CCFs than term loans",
+      "CCFs range from 0% to 100% depending on facility type and remaining maturity",
+    ],
     inputs: [
       {
         name: "Counterparty",
-        value: data.name,
+        value: data.name || "Unknown",
         description: "Entity being assessed",
       },
       {
         name: "Current Outstanding",
-        value: "$" + Math.round(data.ead * 0.8).toLocaleString(),
+        value: data.ead ? "$" + Math.round(data.ead * 0.8).toLocaleString() : "N/A",
         description: "Current drawn amount",
       },
       {
         name: "Undrawn Commitment",
-        value: "$" + Math.round(data.ead * 0.25).toLocaleString(),
+        value: data.ead ? "$" + Math.round(data.ead * 0.25).toLocaleString() : "N/A",
         description: "Available undrawn amount",
       },
       {
@@ -283,7 +323,7 @@ function getEADModuleDetails(data) {
       },
       {
         name: "EAD",
-        value: "$" + Math.round(data.ead).toLocaleString(),
+        value: data.ead ? "$" + Math.round(data.ead).toLocaleString() : "N/A",
         rawValue: data.ead,
         description: "Exposure at Default",
       },
@@ -291,7 +331,7 @@ function getEADModuleDetails(data) {
     outputs: [
       {
         name: "EAD",
-        value: "$" + Math.round(data.ead).toLocaleString(),
+        value: data.ead ? "$" + Math.round(data.ead).toLocaleString() : "N/A",
         description: "Exposure at Default",
       },
       {
@@ -305,17 +345,26 @@ function getEADModuleDetails(data) {
 }
 
 function getCorrelationModuleDetails(data, results) {
+  // Add null checks for results
+  const safeResults = results || {}
+
   return {
     title: "Asset Correlation Calculator",
     description: "Calculates the correlation between the counterparty's assets and systematic risk factors",
     overview:
-      "<p>Asset correlation is a key parameter in the Basel framework that represents the degree to which the asset value of a counterparty is correlated with the general state of the economy.</p>",
+      "<p>Asset correlation measures how closely a counterparty's default risk is tied to the overall economy.</p><p>This module implements the Basel formula for asset correlation, which decreases as PD increases (reflecting that higher-risk borrowers are more idiosyncratic).</p>",
     formula:
       "Correlation = 0.12 × (1 - e^(-50 × PD)) / (1 - e^(-50)) + 0.24 × (1 - (1 - e^(-50 × PD)) / (1 - e^(-50)))",
+    keyConsiderations: [
+      "Asset correlation decreases as PD increases (higher risk borrowers are less correlated with the economy)",
+      "Correlation typically ranges from 12% to 24%",
+      "Financial institutions may receive an Asset Value Correlation (AVC) multiplier of 1.25",
+      "Higher correlation leads to higher capital requirements",
+    ],
     inputs: [
       {
         name: "PD",
-        value: (results.pd * 100).toFixed(4) + "%",
+        value: safeResults.pd ? (safeResults.pd * 100).toFixed(4) + "%" : "N/A",
         description: "Probability of Default used in calculation",
       },
       {
@@ -335,19 +384,19 @@ function getCorrelationModuleDetails(data, results) {
       },
       {
         name: "AVC Multiplier",
-        value: results.avcMultiplier.toFixed(2),
+        value: safeResults.avcMultiplier ? safeResults.avcMultiplier.toFixed(2) : "N/A",
         description: "Asset Value Correlation multiplier",
       },
     ],
     outputs: [
       {
         name: "Base Correlation",
-        value: (results.baseCorrelation * 100).toFixed(2) + "%",
+        value: safeResults.baseCorrelation ? (safeResults.baseCorrelation * 100).toFixed(2) + "%" : "N/A",
         description: "Base asset correlation before AVC multiplier",
       },
       {
         name: "Final Correlation",
-        value: (results.correlation * 100).toFixed(2) + "%",
+        value: safeResults.correlation ? (safeResults.correlation * 100).toFixed(2) + "%" : "N/A",
         description: "Final asset correlation after AVC multiplier",
       },
     ],
@@ -356,24 +405,33 @@ function getCorrelationModuleDetails(data, results) {
 }
 
 function getMaturityModuleDetails(data, results) {
+  // Add null checks for results
+  const safeResults = results || {}
+
   // Create a b parameter if it doesn't exist in results
-  const bValue = results.b || Math.pow(0.11852 - 0.05478 * Math.log(results.pd), 2)
+  const bValue = safeResults.b || (safeResults.pd ? Math.pow(0.11852 - 0.05478 * Math.log(safeResults.pd), 2) : 0)
 
   return {
     title: "Maturity Adjustment Calculator",
     description: "Calculates the adjustment factor for the effective maturity of the exposure",
     overview:
-      "<p>The maturity adjustment factor accounts for the increased risk associated with longer-term exposures. Longer maturities generally carry higher risk as there is more time for the counterparty's creditworthiness to deteriorate.</p>",
-    formula: "Maturity Adjustment = (1 + (M - 2.5) × b) / (1 - 1.5 × b)",
+      "<p>The maturity adjustment accounts for the increased risk of longer-term exposures.</p><p>This module implements the Basel formula that increases capital requirements for exposures with longer maturities, reflecting the greater uncertainty over longer time horizons.</p>",
+    formula: "Maturity Adjustment = (1 + (M - 2.5) × b) / (1 - 1.5 × b)\nwhere b = [0.11852 - 0.05478 × ln(PD)]²",
+    keyConsiderations: [
+      "Longer maturities result in higher capital requirements",
+      "The adjustment is calibrated around a baseline maturity of 2.5 years",
+      "The 'b' parameter decreases as PD increases (high-risk counterparties are less sensitive to maturity)",
+      "Maturity adjustment is typically between 1.0 and 2.0",
+    ],
     inputs: [
       {
         name: "PD",
-        value: (results.pd * 100).toFixed(4) + "%",
+        value: safeResults.pd ? (safeResults.pd * 100).toFixed(4) + "%" : "N/A",
         description: "Probability of Default used in calculation",
       },
       {
         name: "Effective Maturity",
-        value: data.maturity.toFixed(2) + " years",
+        value: data.maturity ? data.maturity.toFixed(2) + " years" : "N/A",
         rawValue: data.maturity,
         description: "Effective maturity of the exposure in years",
       },
@@ -381,12 +439,12 @@ function getMaturityModuleDetails(data, results) {
     outputs: [
       {
         name: "b Parameter",
-        value: bValue.toFixed(6),
+        value: bValue ? bValue.toFixed(6) : "N/A",
         description: "Smoothing parameter in the maturity adjustment formula",
       },
       {
         name: "Maturity Adjustment",
-        value: results.maturityAdjustment.toFixed(4),
+        value: safeResults.maturityAdjustment ? safeResults.maturityAdjustment.toFixed(4) : "N/A",
         description: "Factor that adjusts capital requirements for maturity",
       },
     ],
@@ -395,44 +453,59 @@ function getMaturityModuleDetails(data, results) {
 }
 
 function getAVCModuleDetails(data, results) {
+  // Add null checks for data and results
+  const safeData = data || {}
+  const safeResults = results || {}
+
   return {
     title: "Asset Value Correlation (AVC) Multiplier",
     description: "Calculates the multiplier applied to asset correlation for financial institutions",
     overview:
-      "<p>The Asset Value Correlation (AVC) multiplier is a regulatory adjustment introduced in Basel III to account for the higher interconnectedness and systemic importance of financial institutions.</p>",
+      "<p>The Asset Value Correlation (AVC) multiplier increases the correlation for financial institutions to account for their higher systemic risk.</p><p>This module implements the Basel III requirement to apply a 1.25x multiplier to the asset correlation for large regulated financial institutions and all unregulated financial entities.</p>",
     formula:
-      "For large regulated financial institutions (assets ≥ $100bn) or unregulated financial entities:\nAVC Multiplier = 1.25",
+      "For large regulated financial institutions (assets ≥ $100bn) or unregulated financial entities:\nAVC Multiplier = 1.25\nOtherwise:\nAVC Multiplier = 1.00",
+    keyConsiderations: [
+      "AVC multiplier only applies to financial institutions",
+      "Large financial institutions (assets ≥ $100bn) receive a 1.25x multiplier",
+      "Unregulated financial entities receive a 1.25x multiplier regardless of size",
+      "The multiplier increases capital requirements to reflect higher interconnectedness",
+    ],
     inputs: [
       {
         name: "Counterparty Type",
-        value: data.isFinancial ? "Financial Institution" : "Non-Financial",
+        value:
+          safeData.isFinancial !== undefined
+            ? safeData.isFinancial
+              ? "Financial Institution"
+              : "Non-Financial"
+            : "Unknown",
         description: "Type of counterparty",
       },
       {
         name: "Is Large Financial",
-        value: data.isLargeFinancial ? "Yes" : "No",
+        value: safeData.isLargeFinancial !== undefined ? (safeData.isLargeFinancial ? "Yes" : "No") : "Unknown",
         description: "Whether the financial institution has assets ≥ $100bn",
       },
       {
         name: "Is Regulated",
-        value: data.isRegulated ? "Yes" : "No",
+        value: safeData.isRegulated !== undefined ? (safeData.isRegulated ? "Yes" : "No") : "Unknown",
         description: "Whether the financial institution is regulated",
       },
     ],
     outputs: [
       {
         name: "AVC Multiplier",
-        value: results.avcMultiplier.toFixed(2),
+        value: safeResults.avcMultiplier ? safeResults.avcMultiplier.toFixed(2) : "N/A",
         description: "Multiplier applied to asset correlation",
       },
       {
         name: "Base Correlation",
-        value: (results.baseCorrelation * 100).toFixed(2) + "%",
+        value: safeResults.baseCorrelation ? (safeResults.baseCorrelation * 100).toFixed(2) + "%" : "N/A",
         description: "Base asset correlation before AVC multiplier",
       },
       {
         name: "Final Correlation",
-        value: (results.correlation * 100).toFixed(2) + "%",
+        value: safeResults.correlation ? (safeResults.correlation * 100).toFixed(2) + "%" : "N/A",
         description: "Final asset correlation after AVC multiplier",
       },
     ],
@@ -441,68 +514,79 @@ function getAVCModuleDetails(data, results) {
 }
 
 function getRWAModuleDetails(data, results) {
+  // Add null checks for data and results
+  const safeData = data || {}
+  const safeResults = results || {}
+
   // Check if there are any adjustments
-  const hasAdjustment = results.hasAdjustment || results.hasPortfolioAdjustment
-  const originalRwa = results.originalRwa || results.rwa
-  const adjustedRwa = results.rwa
+  const hasAdjustment = safeResults.hasAdjustment || safeResults.hasPortfolioAdjustment
+  const originalRwa = safeResults.originalRwa || safeResults.rwa || 0
+  const adjustedRwa = safeResults.rwa || 0
   const adjustmentPercentage = hasAdjustment && originalRwa > 0 ? (adjustedRwa / originalRwa - 1) * 100 : 0
 
   return {
     title: "Risk-Weighted Assets (RWA) Calculator",
     description: "Calculates the risk-weighted assets for credit risk under the Advanced IRB approach",
     overview:
-      "<p>Risk-Weighted Assets (RWA) for credit risk represent the amount of capital that a bank needs to hold to cover potential losses from credit exposures.</p>" +
+      "<p>Risk-Weighted Assets (RWA) represent the amount of capital required to cover potential losses from credit risk.</p><p>This module implements the Basel Advanced IRB formula, which combines PD, LGD, EAD, correlation, and maturity adjustment to calculate capital requirements.</p>" +
       (hasAdjustment
         ? `<p class="text-purple-600 dark:text-purple-400">Note: This RWA value includes manual adjustments. Baseline model RWA: $${Math.round(originalRwa).toLocaleString()}.</p>`
         : ""),
     formula:
-      "RWA = K × 12.5 × EAD" +
+      "K = LGD × N[(1 - R)^(-0.5) × G(PD) + (R / (1 - R))^(0.5) × G(0.999)] × Maturity Adjustment\nRWA = K × 12.5 × EAD" +
       (hasAdjustment
         ? `<br><span class="text-purple-600 dark:text-purple-400">Adjusted RWA = Model RWA + Adjustment</span>`
         : ""),
+    keyConsiderations: [
+      "RWA increases with higher PD, LGD, EAD, correlation, and maturity",
+      "The formula uses a 99.9% confidence level (Basel standard)",
+      "RWA density (RWA/EAD) typically ranges from 20% to 250% depending on risk parameters",
+      "Manual adjustments can be applied to reflect factors not captured by the model",
+      "RWA is the final output used for capital requirement calculations",
+    ],
     inputs: [
       {
         name: "PD",
-        value: (results.pd * 100).toFixed(4) + "%",
+        value: safeResults.pd ? (safeResults.pd * 100).toFixed(4) + "%" : "N/A",
         description: "Probability of Default",
       },
       {
         name: "LGD",
-        value: (data.lgd * 100).toFixed(2) + "%",
-        rawValue: data.lgd,
+        value: safeData.lgd ? (safeData.lgd * 100).toFixed(2) + "%" : "N/A",
+        rawValue: safeData.lgd,
         description: "Loss Given Default",
       },
       {
         name: "EAD",
-        value: "$" + Math.round(data.ead).toLocaleString(),
-        rawValue: data.ead,
+        value: safeData.ead ? "$" + Math.round(safeData.ead).toLocaleString() : "N/A",
+        rawValue: safeData.ead,
         description: "Exposure at Default",
       },
       {
         name: "Correlation",
-        value: (results.correlation * 100).toFixed(2) + "%",
+        value: safeResults.correlation ? (safeResults.correlation * 100).toFixed(2) + "%" : "N/A",
         description: "Asset correlation",
       },
       {
         name: "Maturity Adjustment",
-        value: results.maturityAdjustment.toFixed(4),
+        value: safeResults.maturityAdjustment ? safeResults.maturityAdjustment.toFixed(4) : "N/A",
         description: "Adjustment for effective maturity",
       },
     ],
     outputs: [
       {
         name: "Capital Requirement (K)",
-        value: (results.k * 100).toFixed(2) + "%",
+        value: safeResults.k ? (safeResults.k * 100).toFixed(2) + "%" : "N/A",
         description: "Capital requirement as percentage of EAD",
       },
       {
         name: "Model RWA",
-        value: "$" + Math.round(originalRwa).toLocaleString(),
+        value: originalRwa ? "$" + Math.round(originalRwa).toLocaleString() : "N/A",
         description: "Risk-Weighted Assets calculated by the model before any adjustments",
       },
       {
         name: "Final RWA",
-        value: "$" + Math.round(adjustedRwa).toLocaleString(),
+        value: adjustedRwa ? "$" + Math.round(adjustedRwa).toLocaleString() : "N/A",
         description: "Final Risk-Weighted Assets after all adjustments",
         highlight: hasAdjustment,
       },

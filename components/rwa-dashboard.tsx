@@ -86,6 +86,23 @@ export function RWADashboard({ data }) {
     setShowCreditReview(true)
   }
 
+  const handleDiscardCreditReview = () => {
+    const updatedCounterparties = counterparties.map((c) => {
+      if (c.id === selectedCounterparty) {
+        // Remove credit review related properties
+        const { creditRating, creditRatingPd, creditReviewDate, useCredRatingPd, ...rest } = c
+        return rest
+      }
+      return c
+    })
+
+    setCounterparties(updatedCounterparties)
+    setShowCreditReview(false)
+
+    // Remove creditreview from modified modules
+    setModifiedModules(modifiedModules.filter((m) => m !== "creditreview"))
+  }
+
   const handleEadUpdate = (updatedCounterparties) => {
     setCounterparties(updatedCounterparties)
   }
@@ -272,6 +289,21 @@ export function RWADashboard({ data }) {
 
                           <div className="font-medium">PD Used:</div>
                           <div>{counterpartyData.useCredRatingPd ? "Rating PD" : "TTC PD"}</div>
+
+                          <div className="font-medium">Review Date:</div>
+                          <div>{counterpartyData.creditReviewDate || "N/A"}</div>
+
+                          <div className="col-span-2 mt-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full text-xs"
+                              onClick={handleDiscardCreditReview}
+                            >
+                              <RotateCcw className="mr-1 h-3 w-3" />
+                              Reset Credit Review
+                            </Button>
+                          </div>
                         </>
                       )}
 
@@ -442,12 +474,10 @@ export function RWADashboard({ data }) {
 
         {selectedModule && (
           <ModuleDetail
-            module={selectedModule}
-            data={counterpartyData}
-            results={finalRwaResults}
-            baselineResults={baseRwaResults}
+            moduleId={selectedModule}
+            counterpartyData={counterpartyData}
+            onUpdateCounterparty={(updatedData) => handleModuleSave(updatedData, selectedModule)}
             onClose={() => setSelectedModule(null)}
-            onSave={handleModuleSave}
           />
         )}
 
@@ -456,6 +486,7 @@ export function RWADashboard({ data }) {
             counterparty={counterpartyData}
             onSave={handleCreditReviewSave}
             onCancel={() => setShowCreditReview(false)}
+            onDiscard={handleDiscardCreditReview}
           />
         )}
 
