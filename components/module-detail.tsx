@@ -8,11 +8,13 @@ import { getModuleDescription } from "@/lib/module-descriptions"
 import { getModuleDetails, type ModuleType } from "@/lib/module-details"
 import { formatNumber } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
-import { Info, X } from "lucide-react"
+import { Info, X, CodeIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { getModuleCode } from "@/lib/module-code"
+import { Code } from "@/components/ui/code"
 
 interface ModuleDetailProps {
   moduleId: string
@@ -24,6 +26,7 @@ interface ModuleDetailProps {
 export function ModuleDetail({ moduleId, onClose, counterpartyData, onUpdateCounterparty }: ModuleDetailProps) {
   const moduleDetails = getModuleDetails(moduleId, counterpartyData)
   const moduleDescription = getModuleDescription(moduleId)
+  const moduleCode = getModuleCode(moduleId)
   const [editMode, setEditMode] = useState(false)
   const [editValues, setEditValues] = useState<Record<string, any>>({})
   const [showResetConfirm, setShowResetConfirm] = useState(false)
@@ -166,7 +169,7 @@ export function ModuleDetail({ moduleId, onClose, counterpartyData, onUpdateCoun
   }
 
   return (
-    <Card className="w-full max-w-4xl mx-auto">
+    <Card className="w-full max-w-4xl mx-auto border-0 shadow-none">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>{moduleDescription.title || `${moduleId.toUpperCase()} Module`}</CardTitle>
@@ -183,9 +186,10 @@ export function ModuleDetail({ moduleId, onClose, counterpartyData, onUpdateCoun
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="details">Module Details</TabsTrigger>
             <TabsTrigger value="documentation">Documentation</TabsTrigger>
+            <TabsTrigger value="code">Code</TabsTrigger>
           </TabsList>
 
           <TabsContent value="details" className="space-y-4 mt-4">
@@ -345,6 +349,32 @@ export function ModuleDetail({ moduleId, onClose, counterpartyData, onUpdateCoun
               inputs={docInputs}
               outputs={docOutputs}
             />
+          </TabsContent>
+
+          <TabsContent value="code" className="mt-4">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium">Module Implementation</h3>
+                <Badge variant="outline" className="font-mono">
+                  {moduleId}.ts
+                </Badge>
+              </div>
+
+              <div className="relative max-h-[50vh] overflow-auto">
+                <Code language="typescript" code={moduleCode} />
+              </div>
+
+              <div className="mt-4 p-4 bg-muted/50 rounded-md">
+                <div className="flex items-center gap-2 mb-2">
+                  <CodeIcon size={16} />
+                  <h4 className="font-medium">Code Notes</h4>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  This is the actual implementation code for the {moduleDescription.title || moduleId} module. The code
+                  follows the mathematical formulas and regulatory guidelines described in the documentation.
+                </p>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </CardContent>

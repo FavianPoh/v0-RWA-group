@@ -1,22 +1,37 @@
 "use client"
 
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { useEffect, useRef } from "react"
+import { cn } from "@/lib/utils"
+import Prism from "prismjs"
+import "prismjs/components/prism-typescript"
+import "prismjs/components/prism-javascript"
+import "prismjs/components/prism-jsx"
+import "prismjs/components/prism-tsx"
+import "prismjs/themes/prism-tomorrow.css"
 
-export function Code({ language, code }) {
+interface CodeProps {
+  code: string
+  language?: string
+  className?: string
+}
+
+export function Code({ code, language = "typescript", className }: CodeProps) {
+  const codeRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (codeRef.current) {
+      Prism.highlightElement(codeRef.current)
+    }
+  }, [code])
+
   return (
-    <div className="rounded-md overflow-hidden">
-      <SyntaxHighlighter
-        language={language}
-        style={vscDarkPlus}
-        customStyle={{
-          margin: 0,
-          borderRadius: "0.375rem",
-          fontSize: "0.875rem",
-        }}
-      >
-        {code}
-      </SyntaxHighlighter>
+    <div className={cn("relative rounded-md overflow-hidden", className)}>
+      <div className="absolute top-0 right-0 bg-muted px-3 py-1 text-xs font-mono rounded-bl-md">{language}</div>
+      <pre className="p-4 pt-8 overflow-x-auto bg-slate-900 text-slate-50 text-sm">
+        <code ref={codeRef} className={`language-${language}`}>
+          {code}
+        </code>
+      </pre>
     </div>
   )
 }

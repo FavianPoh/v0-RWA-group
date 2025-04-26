@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 import ReactFlow, {
   Background,
   Controls,
@@ -12,6 +13,7 @@ import ReactFlow, {
   Position,
 } from "reactflow"
 import "reactflow/dist/style.css"
+import { ModuleDetail } from "./module-detail"
 
 // Custom node component
 const ModuleNode = ({ data }: { data: any }) => {
@@ -44,6 +46,7 @@ interface ModuleFlowchartProps {
   onModuleSelect: (moduleId: string) => void
   onCreditReview: () => void
   modifiedModules?: string[]
+  onUpdateModule?: (moduleId: string, newData: any) => void
 }
 
 const modulesData = [
@@ -181,8 +184,9 @@ export function ModuleFlowchart({
   onModuleSelect,
   onCreditReview,
   modifiedModules = [],
+  onUpdateModule,
 }: ModuleFlowchartProps) {
-  const [selectedModule, setSelectedModule] = useState(null)
+  const [selectedModule, setSelectedModule] = useState<string | null>(null)
   const [isModuleDetailOpen, setIsModuleDetailOpen] = useState(false)
 
   // Define node positions in a more structured layout
@@ -289,7 +293,7 @@ export function ModuleFlowchart({
       }
 
       setSelectedModule(node.id)
-      onModuleSelect(node.id)
+      setIsModuleDetailOpen(true)
 
       // Update node styles
       setNodes((nds) =>
@@ -303,8 +307,24 @@ export function ModuleFlowchart({
         }),
       )
     },
-    [setNodes, onModuleSelect, onCreditReview],
+    [setNodes, onCreditReview],
   )
+
+  const onModuleUpdate = (newData) => {
+    if (selectedModule && onUpdateModule) {
+      onUpdateModule(selectedModule, newData)
+    }
+  }
+
+  const handleCloseModuleDetail = () => {
+    setIsModuleDetailOpen(false)
+    setSelectedModule(null)
+    setNodes((nds) =>
+      nds.map((n) => {
+        return { ...n, data: { ...n.data, isActive: false } }
+      }),
+    )
+  }
 
   return (
     <div className="w-full h-[700px]">
@@ -322,6 +342,22 @@ export function ModuleFlowchart({
           <Controls />
           <Background variant="dots" gap={12} size={1} />
         </ReactFlow>
+
+        {/* Use Dialog as a popup for module details */}
+        <Dialog open={isModuleDetailOpen} onOpenChange={handleCloseModuleDetail}>
+          <DialogContent className="max-w-4xl max-h-[80vh] p-0 overflow-hidden">
+            <div className="overflow-y-auto max-h-[80vh]">
+              {selectedModule && (
+                <ModuleDetail
+                  moduleId={selectedModule}
+                  counterpartyData={data}
+                  onUpdateCounterparty={onModuleUpdate}
+                  onClose={handleCloseModuleDetail}
+                />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </ReactFlowProvider>
     </div>
   )

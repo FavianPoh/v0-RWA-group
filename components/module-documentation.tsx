@@ -61,7 +61,7 @@ export function ModuleDocumentation({ moduleId, moduleType, inputs, outputs }: M
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full border-0 shadow-none">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>{explanation.title}</CardTitle>
@@ -80,7 +80,7 @@ export function ModuleDocumentation({ moduleId, moduleType, inputs, outputs }: M
             <TabsTrigger value="outputs">Outputs</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-4 mt-4">
+          <TabsContent value="overview" className="space-y-4 mt-4 max-h-[50vh] overflow-y-auto">
             <div className="prose max-w-none">
               <h3>Purpose</h3>
               <p>{explanation.purpose}</p>
@@ -93,7 +93,7 @@ export function ModuleDocumentation({ moduleId, moduleType, inputs, outputs }: M
             </div>
           </TabsContent>
 
-          <TabsContent value="formula" className="space-y-4 mt-4">
+          <TabsContent value="formula" className="space-y-4 mt-4 max-h-[50vh] overflow-y-auto">
             <div className="prose max-w-none">
               <h3>Mathematical Formula</h3>
               <div className="bg-muted p-4 rounded-md font-mono text-lg">
@@ -123,9 +123,9 @@ export function ModuleDocumentation({ moduleId, moduleType, inputs, outputs }: M
           <TabsContent value="inputs" className="mt-4">
             <div className="prose max-w-none">
               <h3>Input Parameters</h3>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[50vh]">
                 <table className="w-full border-collapse">
-                  <thead>
+                  <thead className="sticky top-0 bg-background z-10">
                     <tr className="bg-muted">
                       <th className="border p-2 text-left">Parameter</th>
                       <th className="border p-2 text-left">Current Value</th>
@@ -156,9 +156,9 @@ export function ModuleDocumentation({ moduleId, moduleType, inputs, outputs }: M
           <TabsContent value="outputs" className="mt-4">
             <div className="prose max-w-none">
               <h3>Output Parameters</h3>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[50vh]">
                 <table className="w-full border-collapse">
-                  <thead>
+                  <thead className="sticky top-0 bg-background z-10">
                     <tr className="bg-muted">
                       <th className="border p-2 text-left">Parameter</th>
                       <th className="border p-2 text-left">Current Value</th>
