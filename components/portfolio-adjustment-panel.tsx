@@ -15,6 +15,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Trash2, InfoIcon as InfoCircle } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
+// Format a number safely, returning a string and handling NaN/undefined
+const safeFormatNumber = (value, options = {}) => {
+  if (value === undefined || value === null || isNaN(value)) {
+    return "0"
+  }
+
+  const defaultOptions = {
+    style: "decimal",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }
+
+  const mergedOptions = { ...defaultOptions, ...options }
+
+  return new Intl.NumberFormat("en-US", mergedOptions).format(value)
+}
+
 export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
   // Initialize state
   const [adjustmentType, setAdjustmentType] = useState("percentage")
@@ -25,7 +42,8 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
 
   // Calculate baseline RWA for all counterparties
   const counterpartyData = counterparties.map((cp) => {
-    const baselineRWA = calculateRWA(cp).rwa
+    const result = calculateRWA(cp)
+    const baselineRWA = result.rwa || 0 // Ensure we have a valid number
 
     // Check if this counterparty already has an adjustment
     const existingAdjustment = cp.portfolioRwaAdjustment
@@ -62,10 +80,22 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
     // Calculate the total adjustment amount
     let totalAdjustmentAmount = 0
     if (adjustmentType === "percentage") {
+      const numValue = Number.parseFloat(adjustmentValue) || 0 // Add fallback
+      // For percentage, we're calculating how much to add/subtract
       totalAdjustmentAmount = totalBaselineRWA * (numValue / 100)
     } else {
+      // For absolute, this is the direct amount to add/subtract
+      const numValue = Number.parseFloat(adjustmentValue) || 0 // Add fallback
       totalAdjustmentAmount = numValue
     }
+
+    // Log the calculation for debugging
+    console.log("Adjustment calculation:", {
+      adjustmentType,
+      adjustmentValue,
+      totalBaselineRWA,
+      totalAdjustmentAmount,
+    })
 
     // Distribute the adjustment based on the selected method
     return counterpartyData.map((cp) => {
@@ -76,24 +106,45 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
       switch (distributionMethod) {
         case "proportional":
           // Distribute proportionally to baseline RWA
-          counterpartyAdjustment = totalAdjustmentAmount * (cp.baselineRWA / totalBaselineRWA)
+          counterpartyAdjustment =
+            totalBaselineRWA > 0 ? totalAdjustmentAmount * (cp.baselineRWA / totalBaselineRWA) : 0
           break
         case "equal":
           // Distribute equally among selected counterparties
-          counterpartyAdjustment = totalAdjustmentAmount / selectedCounterparties.length
+          counterpartyAdjustment =
+            selectedCounterparties.length > 0 ? totalAdjustmentAmount / selectedCounterparties.length : 0
           break
         case "risk-weighted":
           // Higher risk (higher RWA density) gets more adjustment
           // This is a simplified approach - could be refined further
           const selectedCPs = counterpartyData.filter((c) => c.selected)
           const totalRiskWeight = selectedCPs.reduce((sum, c) => sum + c.baselineRWA, 0)
-          counterpartyAdjustment = totalAdjustmentAmount * (cp.baselineRWA / totalRiskWeight)
+          counterpartyAdjustment = totalRiskWeight > 0 ? totalAdjustmentAmount * (cp.baselineRWA / totalRiskWeight) : 0
           break
       }
 
-      const adjustedRWA = cp.baselineRWA + counterpartyAdjustment
-      const absoluteChange = counterpartyAdjustment
-      const percentageChange = (counterpartyAdjustment / cp.baselineRWA) * 100
+      // Calculate the adjusted RWA based on the adjustment type
+      let adjustedRWA = 0
+      if (adjustmentType === "percentage") {
+        // For percentage, apply the percentage change to the baseline
+        const percentMultiplier = 1 + (Number.parseFloat(adjustmentValue) || 0) / 100
+        adjustedRWA = cp.baselineRWA * percentMultiplier
+      } else {
+        // For absolute, distribute the absolute amount
+        adjustedRWA = cp.baselineRWA + counterpartyAdjustment
+      }
+
+      const absoluteChange = adjustedRWA - cp.baselineRWA
+      const percentageChange = cp.baselineRWA > 0 ? (absoluteChange / cp.baselineRWA) * 100 : 0
+
+      // Log the adjustment for debugging
+      console.log(`Counterparty ${cp.name} adjustment:`, {
+        baselineRWA: cp.baselineRWA,
+        adjustedRWA,
+        absoluteChange,
+        percentageChange,
+        counterpartyAdjustment,
+      })
 
       return {
         ...cp,
@@ -112,7 +163,7 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
     .reduce((sum, cp) => sum + cp.adjustedRWA, 0)
 
   const totalAbsoluteChange = totalAdjustedRWA - totalBaselineRWA
-  const totalPercentageChange = (totalAbsoluteChange / totalBaselineRWA) * 100
+  const totalPercentageChange = totalBaselineRWA > 0 ? (totalAbsoluteChange / totalBaselineRWA) * 100 : 0 // Add division by zero check
 
   const handleToggleCounterparty = (id) => {
     setSelectedCounterparties((prev) => {
@@ -129,8 +180,9 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
       return
     }
 
+    // Create the portfolio adjustment object
     const portfolioAdjustment = {
-      type: adjustmentType,
+      type: adjustmentType === "percentage" ? "multiplicative" : "additive",
       value: Number.parseFloat(adjustmentValue),
       distributionMethod,
       reason,
@@ -142,15 +194,44 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
       totalPercentageChange,
     }
 
+    // Create counterparty-specific adjustments
     const counterpartyAdjustments = adjustedCounterpartyData
       .filter((cp) => cp.selected)
-      .map((cp) => ({
-        id: cp.id,
-        baselineRWA: cp.baselineRWA,
-        adjustedRWA: cp.adjustedRWA,
-        absoluteChange: cp.absoluteChange,
-        percentageChange: cp.percentageChange,
-      }))
+      .map((cp) => {
+        // Create the appropriate adjustment structure based on type
+        let adjustmentData = {}
+
+        if (adjustmentType === "percentage") {
+          // For percentage adjustments, store as multiplicative with a multiplier
+          const multiplier = 1 + Number.parseFloat(adjustmentValue) / 100
+          adjustmentData = {
+            type: "multiplicative",
+            multiplier: multiplier,
+            adjustment: cp.absoluteChange,
+            adjustedRWA: cp.adjustedRWA,
+          }
+        } else {
+          // For absolute adjustments, store as additive with the adjustment amount
+          adjustmentData = {
+            type: "additive",
+            adjustment: cp.absoluteChange,
+            adjustedRWA: cp.adjustedRWA,
+          }
+        }
+
+        return {
+          id: cp.id,
+          baselineRWA: cp.baselineRWA,
+          ...adjustmentData,
+          percentageChange: cp.percentageChange,
+        }
+      })
+
+    // Log the adjustment data for debugging
+    console.log("Portfolio Adjustment Data:", {
+      portfolioAdjustment,
+      counterpartyAdjustments,
+    })
 
     onSave({ portfolioAdjustment, counterpartyAdjustments })
   }
@@ -170,7 +251,7 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
           <h3 className="text-2xl font-semibold">Portfolio RWA Adjustment</h3>
           <p className="text-muted-foreground">Adjust RWA values across multiple counterparties</p>
         </div>
-        <div className="text-2xl font-bold">${Math.round(totalBaselineRWA).toLocaleString()}</div>
+        <div className="text-2xl font-bold">${safeFormatNumber(totalBaselineRWA)}</div>
       </div>
 
       <Separator />
@@ -273,17 +354,17 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
             <div className="grid grid-cols-2 gap-6 mb-6">
               <div>
                 <div className="text-sm font-medium text-muted-foreground">Total Baseline RWA</div>
-                <div className="text-2xl font-bold">${Math.round(totalBaselineRWA).toLocaleString()}</div>
+                <div className="text-2xl font-bold">${safeFormatNumber(totalBaselineRWA)}</div>
               </div>
               <div>
                 <div className="text-sm font-medium text-muted-foreground">Total Adjusted RWA</div>
-                <div className="text-2xl font-bold">${Math.round(totalAdjustedRWA).toLocaleString()}</div>
+                <div className="text-2xl font-bold">${safeFormatNumber(totalAdjustedRWA)}</div>
               </div>
               <div>
                 <div className="text-sm font-medium text-muted-foreground">Absolute Change</div>
                 <div className="flex items-center">
                   <span className={`text-xl font-bold ${totalAbsoluteChange >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {totalAbsoluteChange >= 0 ? "+" : ""}${Math.abs(Math.round(totalAbsoluteChange)).toLocaleString()}
+                    {totalAbsoluteChange >= 0 ? "+" : ""}${safeFormatNumber(Math.abs(totalAbsoluteChange))}
                   </span>
                 </div>
               </div>
@@ -299,7 +380,7 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
                     }`}
                   >
                     {totalPercentageChange >= 0 ? "+" : ""}
-                    {totalPercentageChange.toFixed(2)}%
+                    {isNaN(totalPercentageChange) ? "0.00" : totalPercentageChange.toFixed(2)}%
                   </Badge>
                 </div>
               </div>
@@ -378,12 +459,8 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
                       </TableCell>
                       <TableCell>{cp.industry}</TableCell>
                       <TableCell>{cp.region}</TableCell>
-                      <TableCell className="text-right font-mono">
-                        ${Math.round(cp.baselineRWA).toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        ${Math.round(cp.adjustedRWA).toLocaleString()}
-                      </TableCell>
+                      <TableCell className="text-right font-mono">${safeFormatNumber(cp.baselineRWA)}</TableCell>
+                      <TableCell className="text-right font-mono">${safeFormatNumber(cp.adjustedRWA)}</TableCell>
                       <TableCell className="text-right">
                         {cp.selected ? (
                           <Badge
@@ -395,7 +472,7 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
                             }`}
                           >
                             {cp.percentageChange >= 0 ? "+" : ""}
-                            {cp.percentageChange.toFixed(2)}%
+                            {isNaN(cp.percentageChange) ? "0.00" : cp.percentageChange.toFixed(2)}%
                           </Badge>
                         ) : (
                           <span className="text-muted-foreground">No change</span>
@@ -432,16 +509,11 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
                         <TableCell className="font-medium">{cp.name}</TableCell>
                         <TableCell>{cp.industry}</TableCell>
                         <TableCell>{cp.region}</TableCell>
-                        <TableCell className="text-right font-mono">
-                          ${Math.round(cp.baselineRWA).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          ${Math.round(cp.adjustedRWA).toLocaleString()}
-                        </TableCell>
+                        <TableCell className="text-right font-mono">${safeFormatNumber(cp.baselineRWA)}</TableCell>
+                        <TableCell className="text-right font-mono">${safeFormatNumber(cp.adjustedRWA)}</TableCell>
                         <TableCell className="text-right">
                           <span className={cp.absoluteChange >= 0 ? "text-green-600" : "text-red-600"}>
-                            {cp.absoluteChange >= 0 ? "+" : ""}$
-                            {Math.abs(Math.round(cp.absoluteChange)).toLocaleString()}
+                            {cp.absoluteChange >= 0 ? "+" : ""}${safeFormatNumber(Math.abs(cp.absoluteChange))}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
@@ -454,7 +526,7 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
                             }`}
                           >
                             {cp.percentageChange >= 0 ? "+" : ""}
-                            {cp.percentageChange.toFixed(2)}%
+                            {isNaN(cp.percentageChange) ? "0.00" : cp.percentageChange.toFixed(2)}%
                           </Badge>
                         </TableCell>
                       </TableRow>

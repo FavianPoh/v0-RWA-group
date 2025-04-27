@@ -5,6 +5,13 @@ import { normInv, normCDF } from "@/lib/utils"
 
 // Main RWA calculation function
 export function calculateRWA(counterparty) {
+  // Add debug logging for the input counterparty
+  console.log("calculateRWA input:", {
+    counterparty,
+    hasRwaAdjustment: !!counterparty?.rwaAdjustment,
+    hasPortfolioAdjustment: !!counterparty?.portfolioRwaAdjustment,
+  })
+
   // Extract parameters from counterparty
   const {
     pd: rawPd,
@@ -19,13 +26,13 @@ export function calculateRWA(counterparty) {
     creditRatingPd,
     rwaAdjustment,
     portfolioRwaAdjustment,
-  } = counterparty
+  } = counterparty || {}
 
-  // Ensure we have numeric values
-  const pd = useCredRatingPd && creditRatingPd ? Number(creditRatingPd) : Number(rawTtcPd || rawPd)
-  const lgd = Number(rawLgd) || 0.45 // Default LGD of 45% if not provided
-  const ead = Number(rawEad) || 0
-  const maturity = Number(rawMaturity) || 2.5 // Default maturity of 2.5 years if not provided
+  // Ensure we have numeric values with fallbacks
+  const pd = useCredRatingPd && creditRatingPd ? ensureNumber(creditRatingPd) : ensureNumber(rawTtcPd || rawPd)
+  const lgd = ensureNumber(rawLgd, 0.45) // Default LGD of 45% if not provided
+  const ead = ensureNumber(rawEad, 0)
+  const maturity = ensureNumber(rawMaturity, 2.5) // Default maturity of 2.5 years if not provided
 
   // Calculate correlation using Basel formula
   const baseCorrelation = calculateBaseCorrelation(pd)
@@ -54,13 +61,27 @@ export function calculateRWA(counterparty) {
     hasAdjustment = true
     originalRwa = baseRWA
 
+    console.log("Applying counterparty adjustment:", rwaAdjustment)
+
     if (rwaAdjustment.type === "absolute") {
-      adjustedRWA = Number(rwaAdjustment.adjustedRWA)
+      // For absolute adjustments, use the provided adjustedRWA directly
+      adjustedRWA = ensureNumber(rwaAdjustment.adjustedRWA, baseRWA)
     } else if (rwaAdjustment.type === "additive") {
-      adjustedRWA = baseRWA + Number(rwaAdjustment.adjustment)
+      // For additive adjustments, add the adjustment to the base RWA
+      const adjustment = ensureNumber(rwaAdjustment.adjustment, 0)
+      adjustedRWA = baseRWA + adjustment
     } else if (rwaAdjustment.type === "multiplicative") {
-      adjustedRWA = baseRWA * Number(rwaAdjustment.multiplier)
+      // For multiplicative adjustments, multiply the base RWA by the multiplier
+      const multiplier = ensureNumber(rwaAdjustment.multiplier, 1)
+      adjustedRWA = baseRWA * multiplier
     }
+
+    console.log("After counterparty adjustment:", {
+      baseRWA,
+      adjustedRWA,
+      change: adjustedRWA - baseRWA,
+      percentChange: (adjustedRWA / baseRWA - 1) * 100,
+    })
   }
 
   // Apply portfolio-level adjustment if present
@@ -71,20 +92,48 @@ export function calculateRWA(counterparty) {
       originalRwa = baseRWA
     }
 
+    // Debug log to check portfolio adjustment values
+    console.log("Applying portfolio adjustment:", portfolioRwaAdjustment)
+
+    const beforePortfolioAdjustment = adjustedRWA
+
     if (portfolioRwaAdjustment.type === "absolute") {
-      adjustedRWA = Number(portfolioRwaAdjustment.adjustedRWA)
+      // For absolute adjustments, use the provided adjustedRWA directly
+      adjustedRWA = ensureNumber(portfolioRwaAdjustment.adjustedRWA, adjustedRWA)
     } else if (portfolioRwaAdjustment.type === "additive") {
-      adjustedRWA = adjustedRWA + Number(portfolioRwaAdjustment.adjustment)
+      // For additive adjustments, add the adjustment to the current RWA
+      const adjustment = ensureNumber(portfolioRwaAdjustment.adjustment, 0)
+      adjustedRWA = adjustedRWA + adjustment
     } else if (portfolioRwaAdjustment.type === "multiplicative") {
-      adjustedRWA = adjustedRWA * Number(portfolioRwaAdjustment.multiplier)
+      // For multiplicative adjustments, multiply the current RWA by the multiplier
+      const multiplier = ensureNumber(portfolioRwaAdjustment.multiplier, 1)
+      adjustedRWA = adjustedRWA * multiplier
+    } else if (portfolioRwaAdjustment.counterpartyAdjustment) {
+      // Handle counterparty-specific adjustment from portfolio adjustment
+      const counterpartyAdj = portfolioRwaAdjustment.counterpartyAdjustment
+
+      if (counterpartyAdj.type === "multiplicative" && counterpartyAdj.multiplier) {
+        adjustedRWA = baseRWA * ensureNumber(counterpartyAdj.multiplier, 1)
+      } else if (counterpartyAdj.type === "additive" && counterpartyAdj.adjustment) {
+        adjustedRWA = baseRWA + ensureNumber(counterpartyAdj.adjustment, 0)
+      } else if (counterpartyAdj.adjustedRWA) {
+        adjustedRWA = ensureNumber(counterpartyAdj.adjustedRWA, baseRWA)
+      }
     }
+
+    console.log("After portfolio adjustment:", {
+      beforePortfolioAdjustment,
+      adjustedRWA,
+      change: adjustedRWA - beforePortfolioAdjustment,
+      percentChange: (adjustedRWA / beforePortfolioAdjustment - 1) * 100,
+    })
   }
 
   // Calculate RWA density (RWA as percentage of EAD)
   const rwaDensity = ead > 0 ? adjustedRWA / ead : 0
 
   // Log the calculation for debugging
-  console.log("RWA Calculation:", {
+  console.log("RWA Calculation results:", {
     pd,
     lgd,
     ead,
@@ -110,10 +159,17 @@ export function calculateRWA(counterparty) {
     k,
     rwa: adjustedRWA,
     originalRwa: hasAdjustment || hasPortfolioAdjustment ? originalRwa : adjustedRWA,
-    hasAdjustment,
+    hasAdjustment: hasAdjustment || hasPortfolioAdjustment,
     hasPortfolioAdjustment,
     rwaDensity,
   }
+}
+
+// Helper function to ensure a value is a valid number
+function ensureNumber(value, defaultValue = 0) {
+  if (value === undefined || value === null) return defaultValue
+  const num = Number(value)
+  return isNaN(num) ? defaultValue : num
 }
 
 // Calculate base correlation using Basel formula

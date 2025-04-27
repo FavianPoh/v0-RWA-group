@@ -33,6 +33,15 @@ function ensureNumber(value: any): number {
   return 0
 }
 
+// Format a number safely for input fields, returning a string and handling NaN/undefined
+function safeFormatNumber(value: any): string {
+  if (value === undefined || value === null) return ""
+  if (typeof value === "number") {
+    return isNaN(value) ? "" : String(value)
+  }
+  return String(value)
+}
+
 interface ModuleDetailProps {
   moduleId: string
   onClose: () => void
@@ -548,15 +557,14 @@ export function ModuleDetail({
                                 type={isNumerical ? "number" : "text"}
                                 step={isNumerical ? "0.0001" : undefined}
                                 min={isNumerical ? "0" : undefined}
-                                value={
+                                value={safeFormatNumber(
                                   editValues[fieldKey] !== undefined
                                     ? editValues[fieldKey]
                                     : rawValue !== undefined
                                       ? rawValue
-                                      : inputValue || ""
-                                }
+                                      : inputValue || "",
+                                )}
                                 onChange={(e) => {
-                                  const value = isNumerical ? Number.parseFloat(e.target.value) : e.target.value
                                   handleInputChange(fieldKey || inputName, e.target.value)
                                 }}
                               />
@@ -639,11 +647,11 @@ export function ModuleDetail({
                       {editMode ? (
                         <Input
                           id={adjustment}
-                          value={
+                          value={safeFormatNumber(
                             editValues[adjustment] !== undefined
                               ? editValues[adjustment]
-                              : counterpartyData[adjustment] || ""
-                          }
+                              : counterpartyData[adjustment] || "",
+                          )}
                           onChange={(e) => handleInputChange(adjustment, e.target.value)}
                         />
                       ) : (

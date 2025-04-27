@@ -54,3 +54,8 @@ export function getRatingFromPd(pd: number): string {
 export function getRatingScale(): string[] {
   return creditRatings.map((r) => r.rating)
 }
+
+// Function to get the credit ratings array
+export function getCreditRatings() {
+  return creditRatings
+}

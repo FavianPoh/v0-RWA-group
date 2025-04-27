@@ -1,139 +1,262 @@
 "use client"
 
-import { useState } from "react"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { creditRatings, getPdFromRating } from "@/lib/credit-ratings"
-import { format } from "date-fns"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
+import { getCreditRatings } from "@/lib/credit-ratings"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertTriangle, Trash2 } from "lucide-react"
+import { AlertCircle, Info } from "lucide-react"
 
-export function CreditReviewDialog({ counterparty, onSave, onCancel, onDiscard }) {
-  const [selectedRating, setSelectedRating] = useState(counterparty.creditRating || "BBB")
-  const [useRatingPd, setUseRatingPd] = useState(counterparty.useCredRatingPd || false)
-  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
+export function CreditReviewDialog({
+  counterparty,
+  onComplete,
+  onSave = () => {},
+  onCancel = () => {},
+  onDiscard = () => {},
+}) {
+  const [rating, setRating] = useState(counterparty?.rating || "BBB")
+  const [pd, setPd] = useState(counterparty?.pd || 0.01)
+  const [pdOverride, setPdOverride] = useState(false)
+  const [notes, setNotes] = useState("")
+  const [error, setError] = useState("")
+  const [creditRatings, setCreditRatings] = useState([])
 
-  const ratingPd = getPdFromRating(selectedRating)
-  const ratingDescription = creditRatings.find((r) => r.rating === selectedRating)?.description
+  // Load credit ratings on component mount
+  useEffect(() => {
+    const ratings = getCreditRatings()
+    setCreditRatings(ratings)
 
-  const handleSave = () => {
-    onSave({
-      creditRating: selectedRating,
-      creditRatingPd: ratingPd,
-      creditReviewDate: format(new Date(), "yyyy-MM-dd"),
-      useCredRatingPd: useRatingPd,
-    })
+    // Set initial values from counterparty
+    if (counterparty) {
+      setRating(counterparty.rating || "BBB")
+      setPd(counterparty.pd || 0.01)
+      setPdOverride(counterparty.pdOverride || false)
+    }
+  }, [counterparty])
+
+  // Update PD when rating changes (unless PD is overridden)
+  useEffect(() => {
+    if (!pdOverride && creditRatings.length > 0) {
+      const selectedRating = creditRatings.find((r) => r.rating === rating)
+      if (selectedRating) {
+        setPd(selectedRating.pd)
+      }
+    }
+  }, [rating, pdOverride, creditRatings])
+
+  // Handle rating change
+  const handleRatingChange = (value) => {
+    setRating(value)
   }
 
+  // Handle PD change
+  const handlePdChange = (value) => {
+    const pdValue = Number.parseFloat(value)
+    if (!isNaN(pdValue) && pdValue >= 0 && pdValue <= 1) {
+      setPd(pdValue)
+    }
+  }
+
+  // Handle PD slider change
+  const handlePdSliderChange = (value) => {
+    setPd(value[0])
+  }
+
+  // Handle save
+  const handleSave = () => {
+    try {
+      console.log("Credit review save triggered with data:", { rating, pd, notes })
+
+      // Validate inputs
+      if (!rating) {
+        setError("Rating is required")
+        return
+      }
+
+      if (pd === null || pd === undefined || isNaN(pd)) {
+        setError("Valid PD is required")
+        return
+      }
+
+      // Prepare data to return
+      const reviewData = {
+        rating,
+        pd,
+        pdOverride,
+        notes,
+        reviewDate: new Date().toISOString(),
+      }
+
+      console.log("Credit review data prepared:", reviewData)
+
+      // Call the appropriate callback
+      if (typeof onComplete === "function") {
+        console.log("Calling onComplete callback")
+        onComplete(reviewData)
+      } else if (typeof onSave === "function") {
+        console.log("Calling onSave callback")
+        onSave(reviewData)
+      } else {
+        console.error("No valid callback provided for credit review save")
+        setError("Unable to save review: No callback provided")
+      }
+    } catch (err) {
+      console.error("Error in credit review save:", err)
+      setError(`Error saving review: ${err.message}`)
+    }
+  }
+
+  // Handle cancel
+  const handleCancel = () => {
+    if (typeof onCancel === "function") {
+      onCancel()
+    }
+  }
+
+  // Handle discard
   const handleDiscard = () => {
-    onDiscard()
-    setShowDiscardConfirm(false)
+    if (typeof onDiscard === "function") {
+      onDiscard()
+    }
+  }
+
+  // Format PD as percentage
+  const formatPdPercentage = (value) => {
+    return `${(value * 100).toFixed(4)}%`
   }
 
   return (
-    <Dialog open={true} onOpenChange={onCancel}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Credit Review: {counterparty.name}</DialogTitle>
-          <DialogDescription>
-            Assign a credit rating to this counterparty and determine whether to use the rating-based PD.
-          </DialogDescription>
-        </DialogHeader>
+    <div className="space-y-4 py-4">
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-        {showDiscardConfirm ? (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Discard Credit Review</AlertTitle>
-            <AlertDescription>
-              This will remove the credit rating and revert to using the model TTC PD. Are you sure?
-              <div className="flex gap-2 mt-2">
-                <Button variant="destructive" size="sm" onClick={handleDiscard}>
-                  Yes, Discard
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setShowDiscardConfirm(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="rating" className="text-right">
-                Credit Rating
-              </Label>
-              <Select value={selectedRating} onValueChange={setSelectedRating} className="col-span-3">
-                <SelectTrigger id="rating">
-                  <SelectValue placeholder="Select rating" />
-                </SelectTrigger>
-                <SelectContent>
-                  {creditRatings.map((rating) => (
-                    <SelectItem key={rating.rating} value={rating.rating}>
-                      {rating.rating} ({(rating.pd * 100).toFixed(4)}%)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      <Card>
+        <CardHeader>
+          <CardTitle>Counterparty Information</CardTitle>
+          <CardDescription>Review the counterparty details</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm font-medium">Name</p>
+              <p>{counterparty?.name || "N/A"}</p>
             </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <div className="text-right text-sm text-muted-foreground">Description</div>
-              <div className="col-span-3 text-sm">{ratingDescription}</div>
+            <div>
+              <p className="text-sm font-medium">Industry</p>
+              <p>{counterparty?.industry || "N/A"}</p>
             </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <div className="text-right text-sm text-muted-foreground">Rating PD</div>
-              <div className="col-span-3 font-medium">{(ratingPd * 100).toFixed(4)}%</div>
+            <div>
+              <p className="text-sm font-medium">Region</p>
+              <p>{counterparty?.region || "N/A"}</p>
             </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <div className="text-right text-sm text-muted-foreground">Model PD</div>
-              <div className="col-span-3 font-medium">{(counterparty.ttcPd * 100).toFixed(4)}%</div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="use-rating" className="text-right">
-                Use Rating PD
-              </Label>
-              <div className="col-span-3 flex items-center space-x-2">
-                <Switch id="use-rating" checked={useRatingPd} onCheckedChange={setUseRatingPd} />
-                <Label htmlFor="use-rating">{useRatingPd ? "Using credit rating PD" : "Using model PD"}</Label>
+            <div>
+              <p className="text-sm font-medium">Current Rating</p>
+              <div className="flex items-center gap-2">
+                <Badge>{counterparty?.rating || "N/A"}</Badge>
+                <span className="text-sm text-muted-foreground">
+                  (PD: {counterparty?.pd ? formatPdPercentage(counterparty.pd) : "N/A"})
+                </span>
               </div>
             </div>
-
-            {counterparty.creditRating && (
-              <div className="mt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                  onClick={() => setShowDiscardConfirm(true)}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Discard Credit Review
-                </Button>
-              </div>
-            )}
           </div>
-        )}
+        </CardContent>
+      </Card>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>Save Credit Review</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="rating">Credit Rating</Label>
+          <Select value={rating} onValueChange={handleRatingChange}>
+            <SelectTrigger id="rating">
+              <SelectValue placeholder="Select rating" />
+            </SelectTrigger>
+            <SelectContent>
+              {creditRatings.map((r) => (
+                <SelectItem key={r.rating} value={r.rating}>
+                  {r.rating} ({formatPdPercentage(r.pd)})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="pd-override">Override PD</Label>
+            <input
+              type="checkbox"
+              id="pd-override"
+              checked={pdOverride}
+              onChange={(e) => setPdOverride(e.target.checked)}
+              className="h-4 w-4"
+            />
+          </div>
+          {pdOverride && (
+            <>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="pd">Probability of Default (PD)</Label>
+                <span className="text-sm font-medium">{formatPdPercentage(pd)}</span>
+              </div>
+              <Slider id="pd" min={0.0001} max={0.2} step={0.0001} value={[pd]} onValueChange={handlePdSliderChange} />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>0.01%</span>
+                <span>20%</span>
+              </div>
+              <div className="mt-2">
+                <Label htmlFor="pd-input">Custom PD Value</Label>
+                <Input
+                  id="pd-input"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.0001}
+                  value={pd}
+                  onChange={(e) => handlePdChange(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="notes">Review Notes</Label>
+          <textarea
+            id="notes"
+            className="w-full min-h-[100px] p-2 border rounded-md"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Enter any notes about this credit review..."
+          />
+        </div>
+
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Rating Information</AlertTitle>
+          <AlertDescription>
+            Changing the credit rating will update the PD used in RWA calculations. If you need to use a custom PD
+            value, check the "Override PD" option.
+          </AlertDescription>
+        </Alert>
+      </div>
+
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button variant="destructive" onClick={handleDiscard}>
+          Discard
+        </Button>
+        <Button variant="outline" onClick={handleCancel}>
+          Cancel
+        </Button>
+        <Button onClick={handleSave}>Save Credit Review</Button>
+      </div>
+    </div>
   )
 }

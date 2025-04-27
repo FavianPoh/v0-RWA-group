@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { calculateRWA } from "@/lib/rwa-calculator"
 import { calculateTtcPd } from "@/lib/ttc-pd-calculator"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -40,6 +40,7 @@ export function RWADashboard() {
   const [isCreditReviewOpen, setIsCreditReviewOpen] = useState(false)
   const [isRWAAdjustmentOpen, setIsRWAAdjustmentOpen] = useState(false)
   const [isPortfolioAdjustmentOpen, setIsPortfolioAdjustmentOpen] = useState(false)
+  const [selectedCounterpartyId, setSelectedCounterpartyId] = useState(initialSelectedCounterparty.id)
 
   // Recalculate RWA when selected counterparty changes
   useEffect(() => {
@@ -49,107 +50,146 @@ export function RWADashboard() {
   }, [selectedCounterparty])
 
   // Handle counterparty selection
-  const handleSelectCounterparty = (counterparty) => {
+  const handleSelectCounterparty = useCallback((counterparty) => {
     console.log("Selecting counterparty:", counterparty.name, counterparty.id)
     // Force a new object reference to ensure React detects the state change
     const counterpartyCopy = JSON.parse(JSON.stringify(counterparty))
     setSelectedCounterparty(counterpartyCopy)
+    setSelectedCounterpartyId(counterparty.id)
     // Immediately calculate new RWA results
     const newResults = calculateRWA(counterpartyCopy)
     console.log("New RWA results:", newResults)
     setRwaResults(newResults)
-  }
+  }, [])
+
+  // Handle discarding credit review
+  const handleDiscardCreditReview = useCallback(() => {
+    console.log("Credit review discarded")
+    setIsCreditReviewOpen(false)
+  }, [])
 
   // Handle credit review completion
-  const handleCreditReviewComplete = (updatedData) => {
-    // Update the selected counterparty with the new PD value
-    const updatedCounterparty = {
-      ...selectedCounterparty,
-      ...updatedData,
-      lastReviewDate: new Date().toISOString(),
-    }
+  const handleCreditReviewComplete = useCallback(
+    (updatedData) => {
+      console.log("Credit review completed with data:", updatedData)
 
-    // Calculate the new TTC PD based on the updated point-in-time PD
-    const ttcPD = calculateTtcPd({
-      pointInTimePd: updatedData.pd,
-      macroeconomicIndex: updatedCounterparty.macroeconomicIndex,
-      longTermAverage: updatedCounterparty.longTermAverage,
-      cyclicality: updatedCounterparty.cyclicality,
-    })
-
-    // Add the TTC PD to the updated counterparty
-    updatedCounterparty.ttcPd = ttcPD
-
-    // Update the counterparty in the list
-    const updatedCounterparties = counterparties.map((cp) => {
-      if (cp.id === selectedCounterparty.id) {
-        return updatedCounterparty
+      // Update the selected counterparty with the new PD value
+      const updatedCounterparty = {
+        ...selectedCounterparty,
+        ...updatedData,
+        lastReviewDate: new Date().toISOString(),
       }
-      return cp
-    })
 
-    // Update state
-    setSelectedCounterparty(updatedCounterparty)
-    setCounterparties(updatedCounterparties)
-    setRwaResults(calculateRWA(updatedCounterparty))
-    setIsCreditReviewOpen(false)
-  }
+      // Calculate the new TTC PD based on the updated point-in-time PD
+      const ttcPD = calculateTtcPd({
+        pointInTimePd: updatedData.pd,
+        macroeconomicIndex: updatedCounterparty.macroeconomicIndex,
+        longTermAverage: updatedCounterparty.longTermAverage,
+        cyclicality: updatedCounterparty.cyclicality,
+      })
+
+      // Add the TTC PD to the updated counterparty
+      updatedCounterparty.ttcPd = ttcPD
+
+      // Update the counterparty in the list
+      const updatedCounterparties = counterparties.map((cp) => {
+        if (cp.id === selectedCounterparty.id) {
+          return updatedCounterparty
+        }
+        return cp
+      })
+
+      // Update state
+      setSelectedCounterparty(updatedCounterparty)
+      setCounterparties(updatedCounterparties)
+
+      // Calculate new RWA results with updated data
+      const newResults = calculateRWA(updatedCounterparty)
+      setRwaResults(newResults)
+
+      // Close the dialog
+      setIsCreditReviewOpen(false)
+    },
+    [counterparties, selectedCounterparty],
+  )
 
   // Handle RWA adjustment
-  const handleRWAAdjustment = (adjustmentData) => {
-    // Update selected counterparty with adjustment
-    const updatedCounterparty = {
-      ...selectedCounterparty,
-      rwaAdjustment: adjustmentData,
-    }
+  const handleRWAAdjustment = useCallback(
+    (adjustmentData) => {
+      console.log("Applying RWA adjustment:", adjustmentData)
 
-    // Update counterparties list
-    const updatedCounterparties = counterparties.map((cp) => {
-      if (cp.id === selectedCounterparty.id) {
-        return updatedCounterparty
+      // Update selected counterparty with adjustment
+      const updatedCounterparty = {
+        ...selectedCounterparty,
+        rwaAdjustment: adjustmentData,
       }
-      return cp
-    })
 
-    // Update state
-    setSelectedCounterparty(updatedCounterparty)
-    setCounterparties(updatedCounterparties)
-    setRwaResults(calculateRWA(updatedCounterparty))
-    setIsRWAAdjustmentOpen(false)
-  }
+      // Update counterparties list
+      const updatedCounterparties = counterparties.map((cp) => {
+        if (cp.id === selectedCounterparty.id) {
+          return updatedCounterparty
+        }
+        return cp
+      })
+
+      // Update state
+      setSelectedCounterparty(updatedCounterparty)
+      setCounterparties(updatedCounterparties)
+
+      // Calculate new RWA results with the adjustment
+      const newResults = calculateRWA(updatedCounterparty)
+      console.log("New RWA results after adjustment:", newResults)
+      setRwaResults(newResults)
+
+      setIsRWAAdjustmentOpen(false)
+    },
+    [counterparties, selectedCounterparty],
+  )
 
   // Handle Portfolio adjustment
-  const handlePortfolioAdjustment = (adjustmentData) => {
-    // Extract the data
-    const { portfolioAdjustment, counterpartyAdjustments } = adjustmentData
+  const handlePortfolioAdjustment = useCallback(
+    (adjustmentData) => {
+      console.log("Applying portfolio adjustment:", adjustmentData)
 
-    // Update each counterparty in the adjustments
-    const updatedCounterparties = counterparties.map((cp) => {
-      const adjustment = counterpartyAdjustments.find((adj) => adj.id === cp.id)
-      if (adjustment) {
-        return {
-          ...cp,
-          portfolioRwaAdjustment: {
-            ...portfolioAdjustment,
-            counterpartyAdjustment: adjustment,
-          },
+      // Extract the data
+      const { portfolioAdjustment, counterpartyAdjustments } = adjustmentData
+
+      // Update each counterparty in the adjustments
+      const updatedCounterparties = counterparties.map((cp) => {
+        const adjustment = counterpartyAdjustments.find((adj) => adj.id === cp.id)
+        if (adjustment) {
+          return {
+            ...cp,
+            portfolioRwaAdjustment: {
+              ...portfolioAdjustment,
+              counterpartyAdjustment: adjustment,
+            },
+          }
         }
-      }
-      return cp
-    })
+        return cp
+      })
 
-    // Find the updated selected counterparty
-    const updatedSelectedCounterparty = updatedCounterparties.find((cp) => cp.id === selectedCounterparty.id)
+      // Find the updated selected counterparty
+      const updatedSelectedCounterparty = updatedCounterparties.find((cp) => cp.id === selectedCounterparty.id)
 
-    // Update state
-    setCounterparties(updatedCounterparties)
-    setSelectedCounterparty(updatedSelectedCounterparty || selectedCounterparty)
-    setRwaResults(calculateRWA(updatedSelectedCounterparty || selectedCounterparty))
-    setIsPortfolioAdjustmentOpen(false)
-  }
+      // Update state
+      setCounterparties(updatedCounterparties)
+      setSelectedCounterparty(updatedSelectedCounterparty || selectedCounterparty)
+
+      // Calculate new RWA results with the adjustment
+      const newResults = calculateRWA(updatedSelectedCounterparty || selectedCounterparty)
+      console.log("New RWA results after portfolio adjustment:", newResults)
+      setRwaResults(newResults)
+
+      setIsPortfolioAdjustmentOpen(false)
+    },
+    [counterparties, selectedCounterparty],
+  )
 
   // Handle removing RWA adjustment
-  const handleRemoveRWAAdjustment = () => {
+  const handleRemoveRWAAdjustment = useCallback(() => {
+    console.log("Removing RWA adjustment")
+
     // Update selected counterparty by removing the adjustment
     const updatedCounterparty = { ...selectedCounterparty }
     delete updatedCounterparty.rwaAdjustment
@@ -165,12 +205,19 @@ export function RWADashboard() {
     // Update state
     setSelectedCounterparty(updatedCounterparty)
     setCounterparties(updatedCounterparties)
-    setRwaResults(calculateRWA(updatedCounterparty))
+
+    // Calculate new RWA results without the adjustment
+    const newResults = calculateRWA(updatedCounterparty)
+    console.log("New RWA results after removing adjustment:", newResults)
+    setRwaResults(newResults)
+
     setIsRWAAdjustmentOpen(false)
-  }
+  }, [counterparties, selectedCounterparty])
 
   // Handle removing portfolio adjustment
-  const handleRemovePortfolioAdjustment = () => {
+  const handleRemovePortfolioAdjustment = useCallback(() => {
+    console.log("Removing portfolio adjustment")
+
     // Update counterparties list by removing portfolio adjustments
     const updatedCounterparties = counterparties.map((cp) => {
       const updatedCp = { ...cp }
@@ -184,30 +231,56 @@ export function RWADashboard() {
     // Update state
     setCounterparties(updatedCounterparties)
     setSelectedCounterparty(updatedSelectedCounterparty)
-    setRwaResults(calculateRWA(updatedSelectedCounterparty))
+
+    // Calculate new RWA results without the adjustment
+    const newResults = calculateRWA(updatedSelectedCounterparty)
+    console.log("New RWA results after removing portfolio adjustment:", newResults)
+    setRwaResults(newResults)
+
     setIsPortfolioAdjustmentOpen(false)
-  }
+  }, [counterparties, selectedCounterparty])
 
   // Handle counterparty update from module detail
-  const handleCounterpartyUpdate = (updatedCounterparty) => {
-    // Update counterparty in list
-    const updatedCounterparties = counterparties.map((cp) => {
-      if (cp.id === updatedCounterparty.id) {
-        return updatedCounterparty
+  const handleCounterpartyUpdate = useCallback(
+    (updatedCounterparty) => {
+      // Update counterparty in list
+      const updatedCounterparties = counterparties.map((cp) => {
+        if (cp.id === updatedCounterparty.id) {
+          return updatedCounterparty
+        }
+        return cp
+      })
+
+      // Update state
+      setSelectedCounterparty(updatedCounterparty)
+      setCounterparties(updatedCounterparties)
+      setRwaResults(calculateRWA(updatedCounterparty))
+    },
+    [counterparties],
+  )
+
+  // Handle counterparty selection from dropdown
+  const handleCounterpartyChange = useCallback(
+    (value) => {
+      console.log("Select value changed to:", value)
+      const counterparty = counterparties.find((cp) => cp.id === value)
+      if (counterparty) {
+        console.log("Found counterparty:", counterparty.name)
+        handleSelectCounterparty(counterparty)
+      } else {
+        console.error("Counterparty not found for ID:", value)
       }
-      return cp
-    })
+    },
+    [counterparties, handleSelectCounterparty],
+  )
 
-    // Update state
-    setSelectedCounterparty(updatedCounterparty)
-    setCounterparties(updatedCounterparties)
-    setRwaResults(calculateRWA(updatedCounterparty))
+  // Format a number safely, returning a string and handling NaN/undefined
+  const safeFormatNumber = (value) => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return "0"
+    }
+    return Math.round(value).toLocaleString()
   }
-
-  // Debug effect to log selected counterparty changes
-  useEffect(() => {
-    console.log("Selected counterparty state updated:", selectedCounterparty.name, selectedCounterparty.id)
-  }, [selectedCounterparty])
 
   return (
     <TooltipProvider>
@@ -220,19 +293,7 @@ export function RWADashboard() {
 
           {/* Add counterparty selector */}
           <div className="w-64">
-            <Select
-              defaultValue={selectedCounterparty.id}
-              onValueChange={(value) => {
-                console.log("Select value changed to:", value)
-                const counterparty = counterparties.find((cp) => cp.id === value)
-                if (counterparty) {
-                  console.log("Found counterparty:", counterparty.name)
-                  handleSelectCounterparty(counterparty)
-                } else {
-                  console.error("Counterparty not found for ID:", value)
-                }
-              }}
-            >
+            <Select value={selectedCounterpartyId} onValueChange={handleCounterpartyChange}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Counterparty" />
               </SelectTrigger>
@@ -324,11 +385,13 @@ export function RWADashboard() {
                   </svg>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">${Math.round(rwaResults.rwa).toLocaleString()}</div>
+                  <div className="text-2xl font-bold">${safeFormatNumber(rwaResults.rwa)}</div>
                   <p className="text-xs text-muted-foreground">
                     {selectedCounterparty.rwaAdjustment
                       ? `Adjusted (${selectedCounterparty.rwaAdjustment.type})`
-                      : "Base calculation"}
+                      : selectedCounterparty.portfolioRwaAdjustment
+                        ? "Portfolio adjusted"
+                        : "Base calculation"}
                   </p>
                 </CardContent>
               </Card>
@@ -488,6 +551,7 @@ export function RWADashboard() {
               counterparty={selectedCounterparty}
               onComplete={handleCreditReviewComplete}
               onCancel={() => setIsCreditReviewOpen(false)}
+              onDiscard={handleDiscardCreditReview}
             />
           </DialogContent>
         </Dialog>

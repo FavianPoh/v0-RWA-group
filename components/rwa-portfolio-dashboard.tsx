@@ -1,11 +1,10 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { calculateRWA } from "@/lib/rwa-calculator"
@@ -28,7 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { AdjustmentHeatmap } from "@/components/adjustment-heatmap"
 
-export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCounterparty }) {
+export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCounterparty, selectedCounterparty }) {
   const [targetRWA, setTargetRWA] = useState("")
   const [chartView, setChartView] = useState("industry")
 
@@ -59,11 +58,19 @@ export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCou
   }
 
   // Reset all EAD adjustments to default (1.0)
-  const resetToDefault = () => {
+  const resetToDefault = useCallback(() => {
     setEadAdjustments(originalEadAdjustments)
     setOptimizationResult(null)
     setTargetRWA("")
-  }
+  }, [originalEadAdjustments])
+
+  // Handle EAD adjustment for a specific counterparty - use useCallback to prevent infinite loops
+  const handleEadAdjustment = useCallback((counterpartyId, value) => {
+    setEadAdjustments((prev) => ({
+      ...prev,
+      [counterpartyId]: value,
+    }))
+  }, [])
 
   // Calculate total portfolio metrics
   const portfolioMetrics = useMemo(() => {
@@ -76,27 +83,23 @@ export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCou
       const result = calculateRWA(cp)
 
       // Get the baseline RWA before any adjustments
-      const baselineRWA = result.rwa
+      const baselineRWA = result.originalRwa || result.rwa || 0
 
-      // Apply counterparty-specific adjustment if present
-      let adjustedRWA = baselineRWA
-      let counterpartyAdjustment = 0
-      if (cp.rwaAdjustment) {
-        adjustedRWA = cp.rwaAdjustment.adjustedRWA
-        counterpartyAdjustment = cp.rwaAdjustment.adjustedRWA - baselineRWA
-      }
-
-      // Apply portfolio-level adjustment if present
-      let portfolioAdjustment = 0
-      if (cp.portfolioRwaAdjustment) {
-        const previousRWA = adjustedRWA
-        adjustedRWA = cp.portfolioRwaAdjustment.adjustedRWA
-        portfolioAdjustment = adjustedRWA - previousRWA
-      }
+      // Get the adjusted RWA after all adjustments
+      const adjustedRWA = result.rwa || 0
 
       // Calculate total adjustment
-      const totalAdjustment = counterpartyAdjustment + portfolioAdjustment
-      const hasAdjustment = totalAdjustment !== 0
+      const totalAdjustment = adjustedRWA - baselineRWA
+      const hasAdjustment = Math.abs(totalAdjustment) > 0.01 // Use a small threshold to account for floating point errors
+
+      // Debug log to check RWA calculation results
+      console.log(`Counterparty ${cp.name} RWA calculation:`, {
+        baselineRWA,
+        adjustedRWA,
+        totalAdjustment,
+        hasAdjustment,
+        result,
+      })
 
       return {
         id: cp.id,
@@ -112,95 +115,103 @@ export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCou
         baselineRWA: baselineRWA,
         rwa: adjustedRWA,
         hasAdjustment,
-        counterpartyAdjustment,
-        portfolioAdjustment,
-        totalAdjustment,
-        adjustmentPercentage: hasAdjustment ? (adjustedRWA / baselineRWA - 1) * 100 : 0,
-        rwaDensity: (adjustedRWA / cp.ead) * 100,
-        adjustmentIntensity: hasAdjustment ? Math.abs((adjustedRWA / baselineRWA - 1) * 100) : 0,
+        totalAdjustment: totalAdjustment,
+        adjustmentPercentage: baselineRWA > 0 ? (adjustedRWA / baselineRWA - 1) * 100 : 0,
+        rwaDensity: cp.ead > 0 ? (adjustedRWA / cp.ead) * 100 : 0,
+        adjustmentIntensity: hasAdjustment && baselineRWA > 0 ? Math.abs((adjustedRWA / baselineRWA - 1) * 100) : 0,
         adjustmentDirection: totalAdjustment >= 0 ? "positive" : "negative",
       }
     })
 
-    const totalEad = rwaResults.reduce((sum, cp) => sum + cp.adjustedEad, 0)
-    const totalBaselineRWA = rwaResults.reduce((sum, cp) => sum + cp.baselineRWA, 0)
-    const totalRwa = rwaResults.reduce((sum, cp) => sum + cp.rwa, 0)
+    // Group by industry and region
+    const byIndustry = rwaResults.reduce((acc, cp) => {
+      if (!acc[cp.industry]) {
+        acc[cp.industry] = {
+          rwa: 0,
+          baselineRWA: 0,
+          adjustment: 0,
+          ead: 0,
+          counterparties: 0,
+          adjustedCounterparties: 0,
+        }
+      }
+      acc[cp.industry].rwa += cp.rwa || 0
+      acc[cp.industry].baselineRWA += cp.baselineRWA || 0
+      acc[cp.industry].adjustment += cp.totalAdjustment || 0
+      acc[cp.industry].ead += cp.adjustedEad || 0
+      acc[cp.industry].counterparties++
+      if (cp.hasAdjustment) {
+        acc[cp.industry].adjustedCounterparties++
+      }
+      return acc
+    }, {})
+
+    const byRegion = rwaResults.reduce((acc, cp) => {
+      if (!acc[cp.region]) {
+        acc[cp.region] = {
+          rwa: 0,
+          baselineRWA: 0,
+          adjustment: 0,
+          ead: 0,
+          counterparties: 0,
+          adjustedCounterparties: 0,
+        }
+      }
+      acc[cp.region].rwa += cp.rwa || 0
+      acc[cp.region].baselineRWA += cp.baselineRWA || 0
+      acc[cp.region].adjustment += cp.totalAdjustment || 0
+      acc[cp.region].ead += cp.adjustedEad || 0
+      acc[cp.region].counterparties++
+      if (cp.hasAdjustment) {
+        acc[cp.region].adjustedCounterparties++
+      }
+      return acc
+    }, {})
+
+    const totalEad = rwaResults.reduce((sum, cp) => sum + (cp.adjustedEad || 0), 0)
+    const totalBaselineRWA = rwaResults.reduce((sum, cp) => sum + (cp.baselineRWA || 0), 0)
+    const totalRwa = rwaResults.reduce((sum, cp) => sum + (cp.rwa || 0), 0)
     const totalAdjustment = totalRwa - totalBaselineRWA
-    const avgRwaDensity = (totalRwa / totalEad) * 100
-    const avgPd = (rwaResults.reduce((sum, cp) => sum + cp.ttcPd, 0) / rwaResults.length) * 100
-    const avgLgd = (rwaResults.reduce((sum, cp) => sum + cp.lgd, 0) / rwaResults.length) * 100
-
-    // Group by industry and region for charts
-    const byIndustry = {}
-    const byRegion = {}
-
-    rwaResults.forEach((cp) => {
-      // Group by industry
-      if (!byIndustry[cp.industry]) {
-        byIndustry[cp.industry] = {
-          rwa: 0,
-          baselineRWA: 0,
-          ead: 0,
-          adjustment: 0,
-          counterparties: 0,
-          adjustedCounterparties: 0,
-        }
-      }
-      byIndustry[cp.industry].rwa += cp.rwa
-      byIndustry[cp.industry].baselineRWA += cp.baselineRWA
-      byIndustry[cp.industry].ead += cp.adjustedEad
-      byIndustry[cp.industry].adjustment += cp.totalAdjustment
-      byIndustry[cp.industry].counterparties += 1
-      if (cp.hasAdjustment) {
-        byIndustry[cp.industry].adjustedCounterparties += 1
-      }
-
-      // Group by region
-      if (!byRegion[cp.region]) {
-        byRegion[cp.region] = {
-          rwa: 0,
-          baselineRWA: 0,
-          ead: 0,
-          adjustment: 0,
-          counterparties: 0,
-          adjustedCounterparties: 0,
-        }
-      }
-      byRegion[cp.region].rwa += cp.rwa
-      byRegion[cp.region].baselineRWA += cp.baselineRWA
-      byRegion[cp.region].ead += cp.adjustedEad
-      byRegion[cp.region].adjustment += cp.totalAdjustment
-      byRegion[cp.region].counterparties += 1
-      if (cp.hasAdjustment) {
-        byRegion[cp.region].adjustedCounterparties += 1
-      }
-    })
+    const avgRwaDensity = totalEad > 0 ? (totalRwa / totalEad) * 100 : 0
+    const avgPd =
+      rwaResults.length > 0 ? (rwaResults.reduce((sum, cp) => sum + (cp.ttcPd || 0), 0) / rwaResults.length) * 100 : 0
+    const avgLgd =
+      rwaResults.length > 0 ? (rwaResults.reduce((sum, cp) => sum + (cp.lgd || 0), 0) / rwaResults.length) * 100 : 0
 
     const industryData = Object.entries(byIndustry).map(([industry, data]) => ({
       name: industry,
-      rwa: data.rwa,
-      baselineRWA: data.baselineRWA,
-      adjustment: data.adjustment,
-      ead: data.ead,
-      density: (data.rwa / data.ead) * 100,
-      adjustmentPercentage: (data.adjustment / data.baselineRWA) * 100,
+      rwa: data.rwa || 0,
+      baselineRWA: data.baselineRWA || 0,
+      adjustment: data.adjustment || 0,
+      ead: data.ead || 0,
+      density: data.ead > 0 ? (data.rwa / data.ead) * 100 : 0,
+      adjustmentPercentage: data.baselineRWA > 0 ? (data.adjustment / data.baselineRWA) * 100 : 0,
       counterparties: data.counterparties,
       adjustedCounterparties: data.adjustedCounterparties,
-      adjustmentRatio: data.adjustedCounterparties / data.counterparties,
+      adjustmentRatio: data.counterparties > 0 ? data.adjustedCounterparties / data.counterparties : 0,
     }))
 
     const regionData = Object.entries(byRegion).map(([region, data]) => ({
       name: region,
-      rwa: data.rwa,
-      baselineRWA: data.baselineRWA,
-      adjustment: data.adjustment,
-      ead: data.ead,
-      density: (data.rwa / data.ead) * 100,
-      adjustmentPercentage: (data.adjustment / data.baselineRWA) * 100,
+      rwa: data.rwa || 0,
+      baselineRWA: data.baselineRWA || 0,
+      adjustment: data.adjustment || 0,
+      ead: data.ead || 0,
+      density: data.ead > 0 ? (data.rwa / data.ead) * 100 : 0,
+      adjustmentPercentage: data.baselineRWA > 0 ? (data.adjustment / data.baselineRWA) * 100 : 0,
       counterparties: data.counterparties,
       adjustedCounterparties: data.adjustedCounterparties,
-      adjustmentRatio: data.adjustedCounterparties / data.counterparties,
+      adjustmentRatio: data.counterparties > 0 ? data.adjustedCounterparties / data.counterparties : 0,
     }))
+
+    // Debug log to check portfolio metrics
+    console.log("Portfolio Metrics:", {
+      totalEad,
+      totalBaselineRWA,
+      totalRwa,
+      totalAdjustment,
+      avgRwaDensity,
+    })
 
     return {
       counterpartyResults: rwaResults,
@@ -213,32 +224,24 @@ export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCou
       avgLgd,
       industryData,
       regionData,
-      hasAdjustments: totalBaselineRWA !== totalRwa,
-      totalAdjustmentPercentage: (totalRwa / totalBaselineRWA - 1) * 100,
+      hasAdjustments: Math.abs(totalBaselineRWA - totalRwa) > 0.01, // Use a small threshold
+      totalAdjustmentPercentage: totalBaselineRWA > 0 ? (totalRwa / totalBaselineRWA - 1) * 100 : 0,
       adjustedCounterparties: rwaResults.filter((cp) => cp.hasAdjustment).length,
       totalCounterparties: rwaResults.length,
     }
   }, [counterparties, eadAdjustments])
 
-  // Handle EAD adjustment for a specific counterparty
-  const handleEadAdjustment = (counterpartyId, value) => {
-    setEadAdjustments((prev) => ({
-      ...prev,
-      [counterpartyId]: value,
-    }))
-  }
-
   // Apply all EAD adjustments to the counterparties
-  const applyAdjustments = () => {
+  const applyAdjustments = useCallback(() => {
     const updatedCounterparties = counterparties.map((cp) => ({
       ...cp,
       ead: cp.ead * eadAdjustments[cp.id],
     }))
     onEadUpdate(updatedCounterparties)
-  }
+  }, [counterparties, eadAdjustments, onEadUpdate])
 
   // Optimize EAD adjustments to reach target RWA
-  const optimizeForTargetRWA = () => {
+  const optimizeForTargetRWA = useCallback(() => {
     const targetValue = Number.parseFloat(targetRWA.replace(/,/g, ""))
     if (isNaN(targetValue) || targetValue <= 0) {
       return
@@ -312,7 +315,17 @@ export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCou
       targetRwa: targetValue,
       achievedRwa: currentTotalRWA - reductionAchieved,
     })
-  }
+  }, [counterparties, eadAdjustments, portfolioMetrics.totalRwa, sortDirection, sortField, targetRWA])
+
+  // Handle counterparty selection
+  const handleCounterpartyClick = useCallback(
+    (cp) => {
+      if (onSelectCounterparty) {
+        onSelectCounterparty(cp)
+      }
+    },
+    [onSelectCounterparty],
+  )
 
   // Colors for charts
   const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#82ca9d", "#ffc658", "#8dd1e1"]
@@ -335,7 +348,7 @@ export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCou
             Adjustment:{" "}
             <span className={`font-medium ${payload[0].payload.adjustment >= 0 ? "text-green-600" : "text-red-600"}`}>
               {payload[0].payload.adjustment >= 0 ? "+" : ""}$
-              {Math.round(payload[0].payload.adjustment).toLocaleString()} (
+              {Math.abs(Math.round(payload[0].payload.adjustment)).toLocaleString()} (
               {payload[0].payload.adjustmentPercentage.toFixed(2)}%)
             </span>
           </p>
@@ -676,6 +689,8 @@ export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCou
                           : "bg-red-50 dark:bg-red-900/10"
                         : ""
                     }
+                    onClick={() => handleCounterpartyClick(cp)}
+                    style={{ cursor: onSelectCounterparty ? "pointer" : "default" }}
                   >
                     <TableCell>
                       {cp.name}
@@ -738,12 +753,13 @@ export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCou
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Slider
+                        <input
+                          type="range"
                           min={0.5}
                           max={1.5}
                           step={0.01}
-                          value={[eadAdjustments[cp.id] || 1]}
-                          onValueChange={(value) => handleEadAdjustment(cp.id, value[0])}
+                          value={eadAdjustments[cp.id] || 1}
+                          onChange={(e) => handleEadAdjustment(cp.id, Number.parseFloat(e.target.value))}
                           className="w-32"
                         />
                         <span className="text-sm font-medium w-12">{(eadAdjustments[cp.id] || 1).toFixed(2)}x</span>
