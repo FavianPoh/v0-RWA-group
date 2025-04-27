@@ -24,7 +24,7 @@ export function getModuleDetails(moduleId, data, results) {
   } else if (moduleId === "avc") {
     return getAVCModuleDetails(safeData, safeResults)
   } else if (moduleId === "rwa") {
-    return getRWAModuleDetails(safeData, safeResults)
+    return getRWAModuleDetails(data, results)
   } else {
     return null
   }
@@ -524,6 +524,33 @@ function getRWAModuleDetails(data, results) {
   const adjustedRwa = safeResults.rwa || 0
   const adjustmentPercentage = hasAdjustment && originalRwa > 0 ? (adjustedRwa / originalRwa - 1) * 100 : 0
 
+  // Use rwaDensity directly from the results if available
+  let rwaDensity = safeResults.rwaDensity
+
+  // If rwaDensity is not available in results, calculate it
+  if (rwaDensity === undefined || rwaDensity === null) {
+    // Ensure we have numeric values for EAD and RWA
+    const ead = Number(safeData.ead)
+    const rwa = Number(adjustedRwa)
+
+    // Only calculate if both values are valid numbers and EAD is greater than zero
+    if (!isNaN(ead) && !isNaN(rwa) && ead > 0) {
+      rwaDensity = rwa / ead
+    } else {
+      rwaDensity = 0
+    }
+  }
+
+  // Debug information
+  console.log("RWA Density in Module Details:", {
+    ead: safeData.ead,
+    rwa: adjustedRwa,
+    rwaDensity: rwaDensity,
+    resultsRwaDensity: safeResults.rwaDensity,
+    eadType: typeof safeData.ead,
+    rwaType: typeof adjustedRwa,
+  })
+
   return {
     title: "Risk-Weighted Assets (RWA) Calculator",
     description: "Calculates the risk-weighted assets for credit risk under the Advanced IRB approach",
@@ -558,7 +585,7 @@ function getRWAModuleDetails(data, results) {
       },
       {
         name: "EAD",
-        value: safeData.ead ? "$" + Math.round(safeData.ead).toLocaleString() : "N/A",
+        value: safeData.ead ? "$" + Math.round(Number(safeData.ead)).toLocaleString() : "N/A",
         rawValue: safeData.ead,
         description: "Exposure at Default",
       },
@@ -597,6 +624,11 @@ function getRWAModuleDetails(data, results) {
           : "No Adjustment",
         description: "Impact of manual adjustments on RWA",
         highlight: hasAdjustment,
+      },
+      {
+        name: "RWA Density",
+        value: rwaDensity > 0 ? (rwaDensity * 100).toFixed(2) + "%" : "N/A",
+        description: "RWA as a percentage of EAD",
       },
     ],
     code: "function calculateRWA(inputs) {\n  const { pd, lgd, ead, correlation, maturityAdjustment } = inputs;\n  \n  // Calculate capital requirement (K)\n  const term1 = normInv(pd);\n  const term2 = Math.sqrt(correlation) * normInv(0.999);\n  const term3 = Math.sqrt(1 - correlation);\n  \n  const conditionalPD = normCDF((term1 + term2) / term3);\n  \n  // Calculate capital requirement before maturity adjustment\n  let k = lgd * conditionalPD;\n  \n  // Apply maturity adjustment\n  k *= maturityAdjustment;\n  \n  // Calculate RWA\n  const rwa = k * 12.5 * ead;\n  \n  // Any manual adjustments would be applied here\n  // adjustedRWA = rwa + adjustment;\n  \n  return {\n    k,\n    rwa\n  };\n}",

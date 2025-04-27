@@ -19,6 +19,7 @@ import { AdjustmentHeatmap } from "@/components/adjustment-heatmap"
 import { SensitivityAnalysis } from "@/components/sensitivity-analysis"
 import { ModuleDocumentation } from "@/components/module-documentation"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Generate initial counterparties data
 const initialCounterparties = generateCounterparties(20)
@@ -42,11 +43,14 @@ export function RWADashboard() {
 
   // Recalculate RWA when selected counterparty changes
   useEffect(() => {
-    setRwaResults(getInitialRWA(selectedCounterparty))
+    const results = calculateRWA(selectedCounterparty)
+    console.log("Selected counterparty changed, new RWA results:", results)
+    setRwaResults(results)
   }, [selectedCounterparty])
 
   // Handle counterparty selection
   const handleSelectCounterparty = (counterparty) => {
+    console.log("Selecting counterparty:", counterparty.name)
     setSelectedCounterparty(counterparty)
   }
 
@@ -60,10 +64,15 @@ export function RWADashboard() {
     }
 
     // Calculate the new TTC PD based on the updated point-in-time PD
-    const ttcPD = calculateTtcPd(updatedData.pd)
+    const ttcPD = calculateTtcPd({
+      pointInTimePd: updatedData.pd,
+      macroeconomicIndex: updatedCounterparty.macroeconomicIndex,
+      longTermAverage: updatedCounterparty.longTermAverage,
+      cyclicality: updatedCounterparty.cyclicality,
+    })
 
     // Add the TTC PD to the updated counterparty
-    updatedCounterparty.ttcPD = ttcPD
+    updatedCounterparty.ttcPd = ttcPD
 
     // Update the counterparty in the list
     const updatedCounterparties = counterparties.map((cp) => {
@@ -197,6 +206,30 @@ export function RWADashboard() {
             <h1 className="text-3xl font-bold tracking-tight">RWA Calculator</h1>
             <p className="text-muted-foreground">Basel III Risk-Weighted Assets calculation based on IRB approach</p>
           </div>
+
+          {/* Add counterparty selector */}
+          <div className="w-64">
+            <Select
+              value={selectedCounterparty.id}
+              onValueChange={(value) => {
+                const counterparty = counterparties.find((cp) => cp.id === value)
+                if (counterparty) {
+                  handleSelectCounterparty(counterparty)
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select Counterparty" />
+              </SelectTrigger>
+              <SelectContent>
+                {counterparties.map((cp) => (
+                  <SelectItem key={cp.id} value={cp.id}>
+                    {cp.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <Tabs defaultValue="counterparty" className="space-y-4">
@@ -301,7 +334,9 @@ export function RWADashboard() {
                   </svg>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{(rwaResults.rwaDensity * 100).toFixed(2)}%</div>
+                  <div className="text-2xl font-bold">
+                    {rwaResults.rwaDensity ? (rwaResults.rwaDensity * 100).toFixed(2) + "%" : "N/A"}
+                  </div>
                   <p className="text-xs text-muted-foreground">RWA / EAD</p>
                 </CardContent>
               </Card>
@@ -359,6 +394,14 @@ export function RWADashboard() {
                     counterparties={counterparties}
                     selectedCounterparty={selectedCounterparty}
                     onSelectCounterparty={handleSelectCounterparty}
+                    onEadUpdate={(updatedCounterparties) => {
+                      setCounterparties(updatedCounterparties)
+                      const updatedSelected = updatedCounterparties.find((cp) => cp.id === selectedCounterparty.id)
+                      if (updatedSelected) {
+                        setSelectedCounterparty(updatedSelected)
+                        setRwaResults(calculateRWA(updatedSelected))
+                      }
+                    }}
                   />
                 </CardContent>
               </Card>
@@ -412,9 +455,11 @@ export function RWADashboard() {
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" hideCloseButton={false}>
             {selectedModule && (
               <ModuleDetail
-                module={selectedModule}
-                counterparty={selectedCounterparty}
-                onUpdate={handleCounterpartyUpdate}
+                moduleId={selectedModule}
+                counterpartyData={selectedCounterparty}
+                results={rwaResults}
+                onUpdateCounterparty={handleCounterpartyUpdate}
+                onClose={() => setIsDetailOpen(false)}
               />
             )}
           </DialogContent>

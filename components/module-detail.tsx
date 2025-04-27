@@ -23,15 +23,32 @@ import { calculateTtcPd } from "@/lib/ttc-pd-calculator"
 // Define a helper function to get all unique values for a specific field across all counterparties
 import { getAllCounterparties } from "@/lib/data-generator"
 
+// Add this helper function near the top of the file, after the imports
+function ensureNumber(value: any): number {
+  if (typeof value === "number") return value
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value)
+    return isNaN(parsed) ? 0 : parsed
+  }
+  return 0
+}
+
 interface ModuleDetailProps {
   moduleId: string
   onClose: () => void
   counterpartyData: any
+  results?: any
   onUpdateCounterparty: (updatedData: any) => void
 }
 
-export function ModuleDetail({ moduleId, onClose, counterpartyData = {}, onUpdateCounterparty }: ModuleDetailProps) {
-  const moduleDetails = getModuleDetails(moduleId, counterpartyData)
+export function ModuleDetail({
+  moduleId,
+  onClose,
+  counterpartyData = {},
+  results = {},
+  onUpdateCounterparty,
+}: ModuleDetailProps) {
+  const moduleDetails = getModuleDetails(moduleId, counterpartyData, results)
   const moduleDescription = getModuleDescription(moduleId)
   const moduleCode = getModuleCode(moduleId)
   const [editMode, setEditMode] = useState(false)
@@ -39,6 +56,11 @@ export function ModuleDetail({ moduleId, onClose, counterpartyData = {}, onUpdat
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [dropdownOptions, setDropdownOptions] = useState<Record<string, string[]>>({})
   const [previewResults, setPreviewResults] = useState<any>(null)
+
+  // Debug log to check what results are being passed
+  useEffect(() => {
+    console.log(`ModuleDetail for ${moduleId} received results:`, results)
+  }, [moduleId, results])
 
   // Get all unique values for dropdown fields
   useEffect(() => {
@@ -248,6 +270,7 @@ export function ModuleDetail({ moduleId, onClose, counterpartyData = {}, onUpdat
     )
   }
 
+  // Then modify the formatValue function to handle RWA Density specifically
   const formatValue = (key: string, value: any): string => {
     if (value === null || value === undefined) return "N/A"
 
@@ -265,13 +288,20 @@ export function ModuleDetail({ moduleId, onClose, counterpartyData = {}, onUpdat
       return value ? "Yes" : "No"
     }
 
+    // Special handling for RWA Density
+    if (key === "RWA Density") {
+      const numValue = ensureNumber(value)
+      return numValue > 0 ? `${(numValue * 100).toFixed(2)}%` : "N/A"
+    }
+
     if (typeof value === "number") {
       // Format percentages
       if (
         (key.toLowerCase().includes("pd") ||
           key.toLowerCase().includes("lgd") ||
           key.toLowerCase().includes("correlation") ||
-          key.toLowerCase().includes("multiplier")) &&
+          key.toLowerCase().includes("multiplier") ||
+          key.toLowerCase().includes("density")) &&
         value >= 0 &&
         value <= 1
       ) {

@@ -485,6 +485,7 @@ export function ModuleFlowchart({
                 <ModuleDetail
                   moduleId={selectedModule}
                   counterpartyData={counterparty}
+                  results={rwaResults}
                   onUpdateCounterparty={handleModuleUpdate}
                   onClose={handleCloseModuleDetail}
                 />
