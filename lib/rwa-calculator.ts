@@ -17,7 +17,7 @@ export function calculateRWA(counterparty) {
   // Calculate base correlation based on PD (Basel formula)
   const baseCorrelation = calculateBaseCorrelation(pd)
 
-  // Apply AVC multiplier to correlation if applicable
+  // Apply AVC multiplier to correlation according to Basel CRE31
   const correlation = baseCorrelation * avcMultiplier
 
   // Calculate maturity adjustment
@@ -42,9 +42,10 @@ export function calculateRWA(counterparty) {
 
 // Determine if AVC multiplier should be applied (Basel Cre31)
 function determineAVCMultiplier(counterparty) {
-  // According to Basel Cre31, correlation is multiplied by 1.25 for:
+  // According to Basel CRE31.43, correlation is multiplied by 1.25 for:
   // - Exposures to financial institutions with assets ≥ $100bn
   // - Exposures to unregulated financial institutions regardless of size
+  // https://www.bis.org/basel_framework/chapter/CRE/31.htm?inforce=20230101&published=20201126
 
   if (counterparty.isFinancial) {
     if (counterparty.isLargeFinancial || !counterparty.isRegulated) {

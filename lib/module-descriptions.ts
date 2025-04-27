@@ -60,15 +60,13 @@ export const moduleDescriptions: Record<string, ModuleDescription> = {
     notes: "Longer maturities generally increase risk weight due to greater uncertainty over longer time horizons.",
   },
   correlation: {
-    title: "Asset Correlation Module",
-    description:
-      "This module calculates the asset correlation factor, which represents the relationship between the borrower's default risk and systematic risk factors.",
-    formula:
-      "Correlation (R) = 0.12 × (1 - e^(-50 × PD)) / (1 - e^(-50)) + 0.24 × (1 - (1 - e^(-50 × PD)) / (1 - e^(-50)))",
+    title: "Correlation Module",
+    description: "Calculates asset correlation based on PD and AVC multiplier",
+    formula: "R = (0.12 * (1 - e^(-50 * PD)) / (1 - e^(-50)) + 0.24 * (1 - (1 - e^(-50 * PD)) / (1 - e^(-50)))) * AVC",
     inputs: ["Probability of Default (PD)"],
     outputs: ["Asset Correlation (R)"],
     notes:
-      "Lower PDs typically result in higher correlation values, reflecting the greater influence of systematic risk on high-quality borrowers.",
+      "According to Basel CRE31.43, correlation is multiplied by 1.25 for exposures to financial institutions with assets ≥ $100bn or unregulated financial institutions regardless of size.",
   },
   capital: {
     title: "Capital Requirement Module",

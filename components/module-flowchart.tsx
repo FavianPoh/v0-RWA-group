@@ -19,18 +19,24 @@ import { calculateRWA } from "@/lib/rwa-calculator"
 
 // Custom node component
 const ModuleNode = ({ data }: { data: any }) => {
+  // Determine background color based on modification status
+  const getBgColor = () => {
+    if (data.isActive) return "bg-blue-50 border-blue-300"
+    if (data.isModified) return "bg-amber-50 border-amber-300"
+    if (data.isAffected) return "bg-purple-50 border-purple-300"
+    return "bg-white border-gray-200"
+  }
+
   return (
     <div
-      className={`p-3 rounded-lg shadow-md border ${
-        data.isActive ? "bg-blue-50 border-blue-300" : "bg-white border-gray-200"
-      } ${data.isModified ? "ring-2 ring-purple-400" : ""}`}
+      className={`p-3 rounded-lg shadow-md border ${getBgColor()} ${data.isModified ? "ring-2 ring-amber-400" : ""}`}
       style={{ width: 180 }}
     >
       {/* Add handles for connections */}
-      <Handle type="target" position={Position.Left} style={{ background: "#555" }} />
-      <Handle type="target" position={Position.Top} style={{ background: "#555" }} />
-      <Handle type="source" position={Position.Right} style={{ background: "#555" }} />
-      <Handle type="source" position={Position.Bottom} style={{ background: "#555" }} />
+      <Handle type="target" position={Position.Left} style={{ background: "#555", width: 8, height: 8 }} />
+      <Handle type="target" position={Position.Top} style={{ background: "#555", width: 8, height: 8 }} />
+      <Handle type="source" position={Position.Right} style={{ background: "#555", width: 8, height: 8 }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: "#555", width: 8, height: 8 }} />
 
       <div className="font-medium text-center">{data.label}</div>
       {data.value !== undefined && (
@@ -86,6 +92,7 @@ const connections = [
     sourceHandle: "right",
     targetHandle: "left",
     animated: true,
+    color: "#3b82f6", // Blue
   },
   {
     id: "ttcpd-correlation",
@@ -95,6 +102,7 @@ const connections = [
     sourceHandle: "right",
     targetHandle: "left",
     animated: true,
+    color: "#3b82f6", // Blue
   },
   {
     id: "avc-correlation",
@@ -104,6 +112,7 @@ const connections = [
     sourceHandle: "bottom",
     targetHandle: "top",
     animated: true,
+    color: "#ec4899", // Pink
   },
   {
     id: "ttcpd-maturity",
@@ -113,6 +122,7 @@ const connections = [
     sourceHandle: "bottom",
     targetHandle: "left",
     animated: true,
+    color: "#3b82f6", // Blue
   },
   {
     id: "creditreview-ttcpd",
@@ -123,6 +133,7 @@ const connections = [
     targetHandle: "top",
     animated: true,
     style: { strokeDasharray: "5,5" },
+    color: "#8b5cf6", // Purple
   },
   {
     id: "correlation-rwa",
@@ -132,6 +143,7 @@ const connections = [
     sourceHandle: "bottom",
     targetHandle: "top",
     animated: true,
+    color: "#10b981", // Green
   },
   {
     id: "lgd-rwa",
@@ -141,6 +153,7 @@ const connections = [
     sourceHandle: "right",
     targetHandle: "left",
     animated: true,
+    color: "#6366f1", // Indigo
   },
   {
     id: "ead-rwa",
@@ -150,6 +163,7 @@ const connections = [
     sourceHandle: "right",
     targetHandle: "bottom",
     animated: true,
+    color: "#06b6d4", // Cyan
   },
   {
     id: "maturity-rwa",
@@ -159,6 +173,7 @@ const connections = [
     sourceHandle: "right",
     targetHandle: "right",
     animated: true,
+    color: "#f59e0b", // Amber
   },
 ]
 
@@ -271,22 +286,23 @@ export function ModuleFlowchart({
     source: connection.from,
     target: connection.to,
     label: connection.label,
-    labelStyle: { fill: "#888", fontSize: 10 },
-    labelBgStyle: { fill: "rgba(255, 255, 255, 0.8)" },
+    labelStyle: { fill: "#555", fontSize: 10, fontWeight: 500 },
+    labelBgStyle: { fill: "rgba(255, 255, 255, 0.9)", rx: 4, ry: 4 },
     animated: connection.animated,
     style: {
-      stroke: connection.style?.strokeDasharray ? "#888" : "#666",
-      strokeWidth: 1.5,
+      stroke: connection.color || "#666",
+      strokeWidth: 2.5,
       ...(connection.style || {}),
     },
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      width: 15,
-      height: 15,
-      color: connection.style?.strokeDasharray ? "#888" : "#666",
+      width: 20,
+      height: 20,
+      color: connection.color || "#666",
     },
     sourceHandle: connection.sourceHandle,
     targetHandle: connection.targetHandle,
+    zIndex: 1000, // Ensure edges are above nodes
   }))
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
@@ -342,20 +358,23 @@ export function ModuleFlowchart({
               data: {
                 ...n.data,
                 value: newResults.avcMultiplier.toFixed(2) + "x",
+                isAffected: true,
               },
             }
           } else if (
             n.id === "correlation" &&
             (updatedData.isFinancial !== undefined ||
               updatedData.isLargeFinancial !== undefined ||
-              updatedData.isRegulated !== undefined)
+              updatedData.isRegulated !== undefined ||
+              updatedData.ttcPd !== undefined)
           ) {
-            // Update correlation node if financial status changed
+            // Update correlation node if financial status or PD changed
             return {
               ...n,
               data: {
                 ...n.data,
                 value: (newResults.correlation * 100).toFixed(2) + "%",
+                isAffected: true,
               },
             }
           } else if (n.id === "rwa") {
@@ -376,10 +395,41 @@ export function ModuleFlowchart({
               data: {
                 ...n.data,
                 value: displayValue,
+                isAffected: true,
+              },
+            }
+          } else if (isAffectedByModifiedModules(n.id, [selectedModule])) {
+            // Mark downstream modules as affected
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                isAffected: true,
               },
             }
           }
           return n
+        }),
+      )
+
+      // Highlight affected edges
+      setEdges((eds) =>
+        eds.map((edge) => {
+          if (edge.source === selectedModule || edge.target === selectedModule) {
+            return {
+              ...edge,
+              style: {
+                ...edge.style,
+                strokeWidth: 3,
+                stroke: "#f59e0b", // Amber color for affected edges
+              },
+              markerEnd: {
+                ...edge.markerEnd,
+                color: "#f59e0b",
+              },
+            }
+          }
+          return edge
         }),
       )
 
@@ -395,11 +445,16 @@ export function ModuleFlowchart({
     setIsModuleDetailOpen(false)
     setSelectedModule(null)
     setPreviewResults(null)
+
+    // Reset node active states
     setNodes((nds) =>
       nds.map((n) => {
         return { ...n, data: { ...n.data, isActive: false } }
       }),
     )
+
+    // Reset edge highlighting
+    setEdges(initialEdges)
   }
 
   return (
@@ -414,6 +469,9 @@ export function ModuleFlowchart({
           nodeTypes={nodeTypes}
           fitView
           className="bg-slate-50 dark:bg-slate-900 rounded-lg"
+          minZoom={0.5}
+          maxZoom={1.5}
+          defaultZoom={0.85}
         >
           <Controls />
           <Background variant="dots" gap={12} size={1} />
@@ -435,6 +493,22 @@ export function ModuleFlowchart({
           </DialogContent>
         </Dialog>
       </ReactFlowProvider>
+
+      {/* Legend for the flowchart */}
+      <div className="mt-4 flex flex-wrap gap-4 text-sm">
+        <div className="flex items-center">
+          <div className="w-3 h-3 bg-amber-50 border border-amber-300 mr-2"></div>
+          <span>Modified Module</span>
+        </div>
+        <div className="flex items-center">
+          <div className="w-3 h-3 bg-purple-50 border border-purple-300 mr-2"></div>
+          <span>Affected by Changes</span>
+        </div>
+        <div className="flex items-center">
+          <div className="w-3 h-3 bg-blue-50 border border-blue-300 mr-2"></div>
+          <span>Selected Module</span>
+        </div>
+      </div>
     </div>
   )
 }
