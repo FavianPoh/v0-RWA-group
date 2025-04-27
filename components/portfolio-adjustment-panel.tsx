@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trash2 } from "lucide-react"
+import { Trash2, InfoIcon as InfoCircle } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
   // Initialize state
@@ -154,23 +155,32 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
     onSave({ portfolioAdjustment, counterpartyAdjustments })
   }
 
+  const selectAllCounterparties = () => {
+    setSelectedCounterparties(counterparties.map((cp) => cp.id))
+  }
+
+  const deselectAllCounterparties = () => {
+    setSelectedCounterparties([])
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-medium">Total Baseline RWA</h3>
-          <p className="text-sm text-muted-foreground">For selected counterparties</p>
+          <h3 className="text-2xl font-semibold">Portfolio RWA Adjustment</h3>
+          <p className="text-muted-foreground">Adjust RWA values across multiple counterparties</p>
         </div>
         <div className="text-2xl font-bold">${Math.round(totalBaselineRWA).toLocaleString()}</div>
       </div>
 
       <Separator />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div>
-            <Label className="text-base">Adjustment Type</Label>
-            <RadioGroup value={adjustmentType} onValueChange={setAdjustmentType} className="flex space-x-4 mt-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="space-y-6">
+          {/* Adjustment Type section */}
+          <div className="space-y-4">
+            <Label className="text-lg font-medium">Adjustment Type</Label>
+            <RadioGroup value={adjustmentType} onValueChange={setAdjustmentType} className="flex space-x-4">
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="percentage" id="percentage" />
                 <Label htmlFor="percentage">Percentage</Label>
@@ -182,26 +192,45 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
             </RadioGroup>
           </div>
 
-          <div>
-            <Label htmlFor="adjustment-value" className="text-base">
-              {adjustmentType === "percentage" ? "Adjustment Percentage" : "Adjustment Amount"}
-            </Label>
-            <div className="flex items-center mt-1">
-              {adjustmentType === "percentage" && <span className="mr-2">%</span>}
-              {adjustmentType === "absolute" && <span className="mr-2">$</span>}
+          {/* Adjustment Value section */}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="adjustment-value" className="text-lg font-medium">
+                {adjustmentType === "percentage" ? "Adjustment Percentage" : "Adjustment Amount"}
+              </Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <InfoCircle className="h-4 w-4 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs">
+                      {adjustmentType === "percentage"
+                        ? "Enter a percentage to increase (positive) or decrease (negative) the RWA"
+                        : "Enter an absolute amount to increase (positive) or decrease (negative) the RWA"}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <div className="flex items-center">
+              {adjustmentType === "percentage" && <span className="mr-2 text-lg">%</span>}
+              {adjustmentType === "absolute" && <span className="mr-2 text-lg">$</span>}
               <Input
                 id="adjustment-value"
                 value={adjustmentValue}
                 onChange={(e) => setAdjustmentValue(e.target.value)}
                 placeholder={adjustmentType === "percentage" ? "e.g. 10 for +10%" : "e.g. 1000000"}
-                className="flex-1"
+                className="flex-1 text-lg h-12"
+                type="number"
               />
             </div>
           </div>
 
-          <div>
-            <Label className="text-base">Distribution Method</Label>
-            <RadioGroup value={distributionMethod} onValueChange={setDistributionMethod} className="space-y-2 mt-2">
+          {/* Distribution Method section */}
+          <div className="space-y-2">
+            <Label className="text-lg font-medium">Distribution Method</Label>
+            <RadioGroup value={distributionMethod} onValueChange={setDistributionMethod} className="space-y-3">
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="proportional" id="proportional" />
                 <Label htmlFor="proportional">Proportional to RWA</Label>
@@ -216,9 +245,12 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
               </div>
             </RadioGroup>
           </div>
+        </div>
 
-          <div>
-            <Label htmlFor="reason" className="text-base">
+        <div className="space-y-6">
+          {/* Adjustment Reason section */}
+          <div className="space-y-2">
+            <Label htmlFor="reason" className="text-lg font-medium">
               Adjustment Reason
             </Label>
             <Textarea
@@ -226,41 +258,41 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Provide a reason for this adjustment..."
-              className="mt-1"
-              rows={3}
+              className="min-h-[200px] text-base"
+              rows={8}
             />
           </div>
         </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle>Adjustment Preview</CardTitle>
+        <Card className="h-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xl">Adjustment Preview</CardTitle>
             <CardDescription>Impact of the adjustment on selected counterparties</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-6 mb-6">
               <div>
-                <div className="text-sm font-medium">Total Baseline RWA</div>
-                <div className="text-xl">${Math.round(totalBaselineRWA).toLocaleString()}</div>
+                <div className="text-sm font-medium text-muted-foreground">Total Baseline RWA</div>
+                <div className="text-2xl font-bold">${Math.round(totalBaselineRWA).toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-sm font-medium">Total Adjusted RWA</div>
-                <div className="text-xl">${Math.round(totalAdjustedRWA).toLocaleString()}</div>
+                <div className="text-sm font-medium text-muted-foreground">Total Adjusted RWA</div>
+                <div className="text-2xl font-bold">${Math.round(totalAdjustedRWA).toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-sm font-medium">Absolute Change</div>
+                <div className="text-sm font-medium text-muted-foreground">Absolute Change</div>
                 <div className="flex items-center">
-                  <span className={totalAbsoluteChange >= 0 ? "text-green-600" : "text-red-600"}>
+                  <span className={`text-xl font-bold ${totalAbsoluteChange >= 0 ? "text-green-600" : "text-red-600"}`}>
                     {totalAbsoluteChange >= 0 ? "+" : ""}${Math.abs(Math.round(totalAbsoluteChange)).toLocaleString()}
                   </span>
                 </div>
               </div>
               <div>
-                <div className="text-sm font-medium">Percentage Change</div>
+                <div className="text-sm font-medium text-muted-foreground">Percentage Change</div>
                 <div className="flex items-center">
                   <Badge
                     variant="outline"
-                    className={`${
+                    className={`text-lg py-1 px-3 ${
                       totalPercentageChange >= 0
                         ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
                         : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
@@ -272,127 +304,176 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
                 </div>
               </div>
             </div>
+
+            <Card className="bg-muted/40 border-dashed">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-semibold">Selected Counterparties</div>
+                  <div className="text-sm text-muted-foreground">
+                    {selectedCounterparties.length} of {counterparties.length}
+                  </div>
+                </div>
+                <div className="h-3 bg-border rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary"
+                    style={{ width: `${(selectedCounterparties.length / counterparties.length) * 100}%` }}
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="table">
-        <TabsList>
-          <TabsTrigger value="table">Table View</TabsTrigger>
-          <TabsTrigger value="selected">Selected Counterparties</TabsTrigger>
-        </TabsList>
-        <TabsContent value="table" className="mt-4">
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">Select</TableHead>
-                  <TableHead>Counterparty</TableHead>
-                  <TableHead>Industry</TableHead>
-                  <TableHead>Baseline RWA</TableHead>
-                  <TableHead>Adjusted RWA</TableHead>
-                  <TableHead>Change</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {adjustedCounterpartyData.map((cp) => (
-                  <TableRow key={cp.id}>
-                    <TableCell>
-                      <input
-                        type="checkbox"
-                        checked={cp.selected}
-                        onChange={() => handleToggleCounterparty(cp.id)}
-                        className="h-4 w-4 rounded border-gray-300"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {cp.name}
-                      {cp.hasExistingAdjustment && (
-                        <Badge variant="outline" className="ml-2">
-                          Has Adjustment
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>{cp.industry}</TableCell>
-                    <TableCell>${Math.round(cp.baselineRWA).toLocaleString()}</TableCell>
-                    <TableCell>${Math.round(cp.adjustedRWA).toLocaleString()}</TableCell>
-                    <TableCell>
-                      {cp.selected ? (
-                        <Badge
-                          variant="outline"
-                          className={`${
-                            cp.percentageChange >= 0
-                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                              : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                          }`}
-                        >
-                          {cp.percentageChange >= 0 ? "+" : ""}
-                          {cp.percentageChange.toFixed(2)}%
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">No change</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+      <Tabs defaultValue="table" className="w-full">
+        <div className="flex justify-between items-center mb-2">
+          <TabsList className="grid w-[400px] grid-cols-2">
+            <TabsTrigger value="table">Table View</TabsTrigger>
+            <TabsTrigger value="selected">Selected Only ({selectedCounterparties.length})</TabsTrigger>
+          </TabsList>
+
+          <div className="flex space-x-2">
+            <Button variant="outline" size="sm" onClick={selectAllCounterparties}>
+              Select All
+            </Button>
+            <Button variant="outline" size="sm" onClick={deselectAllCounterparties}>
+              Deselect All
+            </Button>
           </div>
-        </TabsContent>
-        <TabsContent value="selected" className="mt-4">
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Counterparty</TableHead>
-                  <TableHead>Baseline RWA</TableHead>
-                  <TableHead>Adjusted RWA</TableHead>
-                  <TableHead>Absolute Change</TableHead>
-                  <TableHead>Percentage Change</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {adjustedCounterpartyData
-                  .filter((cp) => cp.selected)
-                  .map((cp) => (
-                    <TableRow key={cp.id}>
-                      <TableCell>{cp.name}</TableCell>
-                      <TableCell>${Math.round(cp.baselineRWA).toLocaleString()}</TableCell>
-                      <TableCell>${Math.round(cp.adjustedRWA).toLocaleString()}</TableCell>
+        </div>
+
+        <TabsContent value="table" className="mt-0">
+          <div className="border rounded-md overflow-hidden">
+            <div className="max-h-[500px] overflow-y-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    <TableHead className="w-12">Select</TableHead>
+                    <TableHead>Counterparty</TableHead>
+                    <TableHead>Industry</TableHead>
+                    <TableHead>Region</TableHead>
+                    <TableHead className="text-right">Baseline RWA</TableHead>
+                    <TableHead className="text-right">Adjusted RWA</TableHead>
+                    <TableHead className="text-right">Change</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {adjustedCounterpartyData.map((cp) => (
+                    <TableRow key={cp.id} className={cp.selected ? "bg-primary/5" : ""}>
                       <TableCell>
-                        <span className={cp.absoluteChange >= 0 ? "text-green-600" : "text-red-600"}>
-                          {cp.absoluteChange >= 0 ? "+" : ""}${Math.abs(Math.round(cp.absoluteChange)).toLocaleString()}
-                        </span>
+                        <input
+                          type="checkbox"
+                          checked={cp.selected}
+                          onChange={() => handleToggleCounterparty(cp.id)}
+                          className="h-5 w-5 rounded border-gray-300"
+                        />
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`${
-                            cp.percentageChange >= 0
-                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                              : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                          }`}
-                        >
-                          {cp.percentageChange >= 0 ? "+" : ""}
-                          {cp.percentageChange.toFixed(2)}%
-                        </Badge>
+                        <div className="font-medium">{cp.name}</div>
+                        {cp.hasExistingAdjustment && (
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            Has Adjustment
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>{cp.industry}</TableCell>
+                      <TableCell>{cp.region}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        ${Math.round(cp.baselineRWA).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        ${Math.round(cp.adjustedRWA).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {cp.selected ? (
+                          <Badge
+                            variant="outline"
+                            className={`${
+                              cp.percentageChange >= 0
+                                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                            }`}
+                          >
+                            {cp.percentageChange >= 0 ? "+" : ""}
+                            {cp.percentageChange.toFixed(2)}%
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">No change</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
-              </TableBody>
-            </Table>
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="selected" className="mt-0">
+          <div className="border rounded-md overflow-hidden">
+            <div className="max-h-[500px] overflow-y-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    <TableHead>Counterparty</TableHead>
+                    <TableHead>Industry</TableHead>
+                    <TableHead>Region</TableHead>
+                    <TableHead className="text-right">Baseline RWA</TableHead>
+                    <TableHead className="text-right">Adjusted RWA</TableHead>
+                    <TableHead className="text-right">Absolute Change</TableHead>
+                    <TableHead className="text-right">Percentage Change</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {adjustedCounterpartyData
+                    .filter((cp) => cp.selected)
+                    .map((cp) => (
+                      <TableRow key={cp.id}>
+                        <TableCell className="font-medium">{cp.name}</TableCell>
+                        <TableCell>{cp.industry}</TableCell>
+                        <TableCell>{cp.region}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          ${Math.round(cp.baselineRWA).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          ${Math.round(cp.adjustedRWA).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className={cp.absoluteChange >= 0 ? "text-green-600" : "text-red-600"}>
+                            {cp.absoluteChange >= 0 ? "+" : ""}$
+                            {Math.abs(Math.round(cp.absoluteChange)).toLocaleString()}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge
+                            variant="outline"
+                            className={`${
+                              cp.percentageChange >= 0
+                                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                            }`}
+                          >
+                            {cp.percentageChange >= 0 ? "+" : ""}
+                            {cp.percentageChange.toFixed(2)}%
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
 
-      <div className="flex justify-between">
+      <div className="flex justify-between pt-4">
         {onRemove && (
-          <Button variant="destructive" onClick={onRemove}>
-            <Trash2 className="mr-2 h-4 w-4" />
+          <Button variant="destructive" size="lg" onClick={onRemove}>
+            <Trash2 className="mr-2 h-5 w-5" />
             Remove Portfolio Adjustment
           </Button>
         )}
-        <Button onClick={handleSave} className={onRemove ? "" : "ml-auto"}>
+        <Button onClick={handleSave} size="lg" className={onRemove ? "" : "ml-auto"}>
           Save Adjustment
         </Button>
       </div>

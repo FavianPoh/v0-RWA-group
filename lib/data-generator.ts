@@ -254,3 +254,5 @@ export function getAllCounterparties() {
     },
   ]
 }
+
+export const generateCounterparties = generateSyntheticData
