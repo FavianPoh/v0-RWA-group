@@ -333,6 +333,9 @@ export function RWADashboard() {
                       setSelectedModule(module)
                       setIsDetailOpen(true)
                     }}
+                    onCreditReview={() => setIsCreditReviewOpen(true)}
+                    modifiedModules={selectedCounterparty?.modifiedModules || []}
+                    onUpdateCounterparty={handleCounterpartyUpdate}
                   />
                 </CardContent>
               </Card>

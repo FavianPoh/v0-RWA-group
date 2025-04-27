@@ -55,10 +55,10 @@ const nodeTypes: NodeTypes = {
 }
 
 interface ModuleFlowchartProps {
-  data: any
-  results: any
-  onModuleSelect: (moduleId: string) => void
-  onCreditReview: () => void
+  counterparty: any
+  rwaResults: any
+  onSelectModule: (moduleId: string) => void
+  onCreditReview?: () => void
   modifiedModules?: string[]
   onUpdateCounterparty?: (updatedData: any) => void
 }
@@ -202,9 +202,9 @@ function getUpstreamModules(moduleId) {
 }
 
 export function ModuleFlowchart({
-  data,
-  results,
-  onModuleSelect,
+  counterparty,
+  rwaResults,
+  onSelectModule,
   onCreditReview,
   modifiedModules = [],
   onUpdateCounterparty,
@@ -233,14 +233,14 @@ export function ModuleFlowchart({
       label: module.name,
       description: module.description,
       value: (() => {
-        if (!results) return "N/A"
+        if (!rwaResults) return "N/A"
 
         if (module.id === "rwa") {
-          const finalRwa = results.rwa
-          const hasAdjustment = results.hasAdjustment || results.hasPortfolioAdjustment || results.originalRwa
+          const finalRwa = rwaResults.rwa
+          const hasAdjustment = rwaResults.hasAdjustment || rwaResults.hasPortfolioAdjustment || rwaResults.originalRwa
 
           if (hasAdjustment) {
-            const originalRwa = results.originalRwa || results.rwa
+            const originalRwa = rwaResults.originalRwa || rwaResults.rwa
             const adjustmentPercentage = (finalRwa / originalRwa - 1) * 100
             return `$${Math.round(finalRwa).toLocaleString()} (${adjustmentPercentage >= 0 ? "+" : ""}${adjustmentPercentage.toFixed(1)}%)`
           }
@@ -250,21 +250,21 @@ export function ModuleFlowchart({
 
         switch (module.id) {
           case "pd":
-            return data ? (data.pd * 100).toFixed(2) + "%" : "N/A"
+            return counterparty ? (counterparty.pd * 100).toFixed(2) + "%" : "N/A"
           case "ttcpd":
-            return data ? (data.ttcPd * 100).toFixed(2) + "%" : "N/A"
+            return counterparty ? (counterparty.ttcPd * 100).toFixed(2) + "%" : "N/A"
           case "creditreview":
-            return data ? (data.creditRating ? data.creditRating : "Not Reviewed") : "N/A"
+            return counterparty ? (counterparty.creditRating ? counterparty.creditRating : "Not Reviewed") : "N/A"
           case "lgd":
-            return data ? (data.lgd * 100).toFixed(2) + "%" : "N/A"
+            return counterparty ? (counterparty.lgd * 100).toFixed(2) + "%" : "N/A"
           case "ead":
-            return data ? `$${Math.round(data.ead).toLocaleString()}` : "N/A"
+            return counterparty ? `$${Math.round(counterparty.ead).toLocaleString()}` : "N/A"
           case "avc":
-            return results ? results.avcMultiplier.toFixed(2) + "x" : "N/A"
+            return rwaResults ? rwaResults.avcMultiplier.toFixed(2) + "x" : "N/A"
           case "correlation":
-            return results ? (results.correlation * 100).toFixed(2) + "%" : "N/A"
+            return rwaResults ? (rwaResults.correlation * 100).toFixed(2) + "%" : "N/A"
           case "maturity":
-            return results ? results.maturityAdjustment.toFixed(4) : "N/A"
+            return rwaResults ? rwaResults.maturityAdjustment.toFixed(4) : "N/A"
           default:
             return "N/A"
         }
@@ -338,7 +338,7 @@ export function ModuleFlowchart({
   const handleModuleUpdate = (updatedData) => {
     if (selectedModule && onUpdateCounterparty) {
       // Calculate new results based on updated data
-      const tempData = { ...data, ...updatedData }
+      const tempData = { ...counterparty, ...updatedData }
       const newResults = calculateRWA(tempData)
 
       // Update the node display with new results
@@ -484,7 +484,7 @@ export function ModuleFlowchart({
               {selectedModule && (
                 <ModuleDetail
                   moduleId={selectedModule}
-                  counterpartyData={data}
+                  counterpartyData={counterparty}
                   onUpdateCounterparty={handleModuleUpdate}
                   onClose={handleCloseModuleDetail}
                 />

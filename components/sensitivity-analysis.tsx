@@ -29,8 +29,23 @@ import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger }
 export function SensitivityAnalysis({ counterpartyData }) {
   const [activeTab, setActiveTab] = useState("basic")
 
+  // Before calling calculateRWA, ensure counterparty is defined
+  const safeCounterparty = counterpartyData || {
+    useCredRatingPd: false,
+    pd: 0.01,
+    lgd: 0.45,
+    ead: 1000000,
+    maturity: 2.5,
+    macroeconomicIndex: 0.5,
+    longTermAverage: 0.02,
+    cyclicality: 0.5,
+    creditRating: "BBB",
+    creditRatingPd: 0.01,
+    // Add other default properties as needed
+  }
+
   // Calculate baseline RWA for comparison - memoize this to prevent recalculation
-  const baselineRWA = calculateRWA(counterpartyData).rwa
+  const baselineRWA = calculateRWA(safeCounterparty).rwa
 
   // Default values for resetting - exact values from counterparty data
   const defaultValues = {
@@ -38,11 +53,11 @@ export function SensitivityAnalysis({ counterpartyData }) {
     lgdMultiplier: 1,
     eadMultiplier: 1,
     ttcPdMultiplier: 1,
-    maturity: counterpartyData.maturity,
-    macroeconomicIndex: counterpartyData.macroeconomicIndex,
-    cyclicality: counterpartyData.cyclicality,
-    selectedRating: counterpartyData.creditRating || "BBB",
-    useRatingPd: counterpartyData.useCredRatingPd || false,
+    maturity: safeCounterparty.maturity,
+    macroeconomicIndex: safeCounterparty.macroeconomicIndex,
+    cyclicality: safeCounterparty.cyclicality,
+    selectedRating: safeCounterparty.creditRating || "BBB",
+    useRatingPd: safeCounterparty.useCredRatingPd || false,
   }
 
   // Basic parameters
@@ -217,19 +232,19 @@ export function SensitivityAnalysis({ counterpartyData }) {
     // Generate sensitivity data points for basic parameters
     const pdSensitivity = Array.from({ length: 11 }, (_, i) => {
       const multiplier = 0.5 + i * 0.1
-      const modifiedPd = counterpartyData.pd * multiplier
+      const modifiedPd = safeCounterparty.pd * multiplier
 
       // Recalculate TTC PD with the modified PD
       const ttcPdInputs = {
         pointInTimePd: modifiedPd,
-        macroeconomicIndex: counterpartyData.macroeconomicIndex,
-        longTermAverage: counterpartyData.longTermAverage,
-        cyclicality: counterpartyData.cyclicality,
+        macroeconomicIndex: safeCounterparty.macroeconomicIndex,
+        longTermAverage: safeCounterparty.longTermAverage,
+        cyclicality: safeCounterparty.cyclicality,
       }
       const newTtcPd = calculateTtcPd(ttcPdInputs)
 
       const modifiedData = {
-        ...counterpartyData,
+        ...safeCounterparty,
         pd: modifiedPd,
         ttcPd: newTtcPd,
       }
@@ -243,10 +258,10 @@ export function SensitivityAnalysis({ counterpartyData }) {
 
     const ttcPdSensitivity = Array.from({ length: 11 }, (_, i) => {
       const multiplier = 0.5 + i * 0.1
-      const modifiedTtcPd = counterpartyData.ttcPd * multiplier
+      const modifiedTtcPd = safeCounterparty.ttcPd * multiplier
 
       const modifiedData = {
-        ...counterpartyData,
+        ...safeCounterparty,
         ttcPd: modifiedTtcPd,
       }
       const result = calculateRWA(modifiedData)
@@ -259,7 +274,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
 
     const lgdSensitivity = Array.from({ length: 11 }, (_, i) => {
       const multiplier = 0.5 + i * 0.1
-      const modifiedData = { ...counterpartyData, lgd: counterpartyData.lgd * multiplier }
+      const modifiedData = { ...safeCounterparty, lgd: safeCounterparty.lgd * multiplier }
       const result = calculateRWA(modifiedData)
       return {
         multiplier: multiplier.toFixed(1),
@@ -270,7 +285,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
 
     const eadSensitivity = Array.from({ length: 11 }, (_, i) => {
       const multiplier = 0.5 + i * 0.1
-      const modifiedData = { ...counterpartyData, ead: counterpartyData.ead * multiplier }
+      const modifiedData = { ...safeCounterparty, ead: safeCounterparty.ead * multiplier }
       const result = calculateRWA(modifiedData)
       return {
         multiplier: multiplier.toFixed(1),
@@ -282,7 +297,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
     // Generate sensitivity data for advanced parameters
     const maturitySensitivity = Array.from({ length: 11 }, (_, i) => {
       const maturityValue = 0.5 + i * 0.5 // 0.5 to 5.5 years
-      const modifiedData = { ...counterpartyData, maturity: maturityValue }
+      const modifiedData = { ...safeCounterparty, maturity: maturityValue }
       const result = calculateRWA(modifiedData)
       return {
         value: maturityValue.toFixed(1),
@@ -295,13 +310,13 @@ export function SensitivityAnalysis({ counterpartyData }) {
       const indexValue = i * 0.1 // 0.0 to 1.0
       // Recalculate TTC PD with new economic index
       const ttcPdInputs = {
-        pointInTimePd: counterpartyData.pd,
+        pointInTimePd: safeCounterparty.pd,
         macroeconomicIndex: indexValue,
-        longTermAverage: counterpartyData.longTermAverage,
-        cyclicality: counterpartyData.cyclicality,
+        longTermAverage: safeCounterparty.longTermAverage,
+        cyclicality: safeCounterparty.cyclicality,
       }
       const newTtcPd = calculateTtcPd(ttcPdInputs)
-      const modifiedData = { ...counterpartyData, ttcPd: newTtcPd, macroeconomicIndex: indexValue }
+      const modifiedData = { ...safeCounterparty, ttcPd: newTtcPd, macroeconomicIndex: indexValue }
       const result = calculateRWA(modifiedData)
       return {
         value: indexValue.toFixed(1),
@@ -314,13 +329,13 @@ export function SensitivityAnalysis({ counterpartyData }) {
       const cyclicalityValue = i * 0.1 // 0.0 to 1.0
       // Recalculate TTC PD with new cyclicality
       const ttcPdInputs = {
-        pointInTimePd: counterpartyData.pd,
-        macroeconomicIndex: counterpartyData.macroeconomicIndex,
-        longTermAverage: counterpartyData.longTermAverage,
+        pointInTimePd: safeCounterparty.pd,
+        macroeconomicIndex: safeCounterparty.macroeconomicIndex,
+        longTermAverage: safeCounterparty.longTermAverage,
         cyclicality: cyclicalityValue,
       }
       const newTtcPd = calculateTtcPd(ttcPdInputs)
-      const modifiedData = { ...counterpartyData, ttcPd: newTtcPd, cyclicality: cyclicalityValue }
+      const modifiedData = { ...safeCounterparty, ttcPd: newTtcPd, cyclicality: cyclicalityValue }
       const result = calculateRWA(modifiedData)
       return {
         value: cyclicalityValue.toFixed(1),
@@ -335,7 +350,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
       .map((rating) => {
         const ratingPd = rating.pd
         const modifiedData = {
-          ...counterpartyData,
+          ...safeCounterparty,
           creditRating: rating.rating,
           creditRatingPd: ratingPd,
           useCredRatingPd: true,
@@ -364,26 +379,26 @@ export function SensitivityAnalysis({ counterpartyData }) {
         ratingSensitivity,
       },
     })
-  }, [counterpartyData])
+  }, [safeCounterparty])
 
   // Calculate current RWA based on sliders and active tab - memoize this calculation
   const calculateCurrentRWA = useCallback(() => {
-    let modifiedData = { ...counterpartyData }
+    let modifiedData = { ...safeCounterparty }
 
     if (activeTab === "basic") {
       // Only apply modifications if values differ from defaults
       if (pdMultiplier !== 1 || ttcPdMultiplier !== 1 || lgdMultiplier !== 1 || eadMultiplier !== 1) {
         // First calculate the modified PD
-        const modifiedPd = counterpartyData.pd * pdMultiplier
+        const modifiedPd = safeCounterparty.pd * pdMultiplier
 
         // Recalculate TTC PD with the modified PD if PD multiplier is not default
-        let newTtcPd = counterpartyData.ttcPd
+        let newTtcPd = safeCounterparty.ttcPd
         if (pdMultiplier !== 1) {
           const ttcPdInputs = {
             pointInTimePd: modifiedPd,
-            macroeconomicIndex: counterpartyData.macroeconomicIndex,
-            longTermAverage: counterpartyData.longTermAverage,
-            cyclicality: counterpartyData.cyclicality,
+            macroeconomicIndex: safeCounterparty.macroeconomicIndex,
+            longTermAverage: safeCounterparty.longTermAverage,
+            cyclicality: safeCounterparty.cyclicality,
           }
           newTtcPd = calculateTtcPd(ttcPdInputs)
         }
@@ -394,31 +409,31 @@ export function SensitivityAnalysis({ counterpartyData }) {
         }
 
         modifiedData = {
-          ...counterpartyData,
+          ...safeCounterparty,
           pd: modifiedPd,
           ttcPd: newTtcPd,
-          lgd: counterpartyData.lgd * lgdMultiplier,
-          ead: counterpartyData.ead * eadMultiplier,
+          lgd: safeCounterparty.lgd * lgdMultiplier,
+          ead: safeCounterparty.ead * eadMultiplier,
         }
       }
     } else if (activeTab === "advanced") {
       // Only apply modifications if values differ from defaults
       if (
-        maturity !== counterpartyData.maturity ||
-        macroeconomicIndex !== counterpartyData.macroeconomicIndex ||
-        cyclicality !== counterpartyData.cyclicality
+        maturity !== safeCounterparty.maturity ||
+        macroeconomicIndex !== safeCounterparty.macroeconomicIndex ||
+        cyclicality !== safeCounterparty.cyclicality
       ) {
         // Recalculate TTC PD with new parameters
         const ttcPdInputs = {
-          pointInTimePd: counterpartyData.pd,
+          pointInTimePd: safeCounterparty.pd,
           macroeconomicIndex,
-          longTermAverage: counterpartyData.longTermAverage,
+          longTermAverage: safeCounterparty.longTermAverage,
           cyclicality,
         }
         const newTtcPd = calculateTtcPd(ttcPdInputs)
 
         modifiedData = {
-          ...counterpartyData,
+          ...safeCounterparty,
           ttcPd: newTtcPd,
           maturity,
           macroeconomicIndex,
@@ -428,12 +443,12 @@ export function SensitivityAnalysis({ counterpartyData }) {
     } else if (activeTab === "rating") {
       // Only apply modifications if values differ from defaults
       if (
-        selectedRating !== (counterpartyData.creditRating || "BBB") ||
-        useRatingPd !== (counterpartyData.useCredRatingPd || false)
+        selectedRating !== (safeCounterparty.creditRating || "BBB") ||
+        useRatingPd !== (safeCounterparty.useCredRatingPd || false)
       ) {
         const ratingPd = getPdFromRating(selectedRating)
         modifiedData = {
-          ...counterpartyData,
+          ...safeCounterparty,
           creditRating: selectedRating,
           creditRatingPd: ratingPd,
           useCredRatingPd: useRatingPd,
@@ -444,7 +459,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
     return calculateRWA(modifiedData)
   }, [
     activeTab,
-    counterpartyData,
+    safeCounterparty,
     pdMultiplier,
     ttcPdMultiplier,
     lgdMultiplier,
@@ -469,19 +484,19 @@ export function SensitivityAnalysis({ counterpartyData }) {
     const baseValue = (() => {
       switch (rangeParameter) {
         case "pd":
-          return counterpartyData.pd
+          return safeCounterparty.pd
         case "ttcPd":
-          return counterpartyData.ttcPd
+          return safeCounterparty.ttcPd
         case "lgd":
-          return counterpartyData.lgd
+          return safeCounterparty.lgd
         case "ead":
-          return counterpartyData.ead
+          return safeCounterparty.ead
         case "maturity":
-          return counterpartyData.maturity
+          return safeCounterparty.maturity
         case "macroeconomicIndex":
-          return counterpartyData.macroeconomicIndex
+          return safeCounterparty.macroeconomicIndex
         case "cyclicality":
-          return counterpartyData.cyclicality
+          return safeCounterparty.cyclicality
         default:
           return 0
       }
@@ -513,7 +528,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
       if (paramValue > actualMaxValue) break
 
       // Create modified data for this parameter value
-      const modifiedData = { ...counterpartyData }
+      const modifiedData = { ...safeCounterparty }
 
       // Apply the parameter value
       switch (rangeParameter) {
@@ -590,7 +605,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
     }
 
     setRangeAnalysisData(data)
-  }, [counterpartyData, rangeAnalysisEnabled, rangeParameter, rangeIncrement, rangeMax])
+  }, [safeCounterparty, rangeAnalysisEnabled, rangeParameter, rangeIncrement, rangeMax])
 
   // Generate credit rating range analysis
   const generateCreditRatingRangeAnalysis = useCallback(() => {
@@ -604,7 +619,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
     const data = []
 
     // Add current rating
-    const baseData = { ...counterpartyData }
+    const baseData = { ...safeCounterparty }
     baseData.creditRating = selectedRating
     baseData.creditRatingPd = getPdFromRating(selectedRating)
     baseData.useCredRatingPd = true
@@ -624,7 +639,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
       if (ratingIndex >= creditRatings.length) break
 
       const rating = creditRatings[ratingIndex]
-      const modifiedData = { ...counterpartyData }
+      const modifiedData = { ...safeCounterparty }
       modifiedData.creditRating = rating.rating
       modifiedData.creditRatingPd = rating.pd
       modifiedData.useCredRatingPd = true
@@ -640,7 +655,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
     }
 
     setRangeAnalysisData(data)
-  }, [counterpartyData, selectedRating, rangeMax])
+  }, [safeCounterparty, selectedRating, rangeMax])
 
   // Format parameter name for display
   const formatParameterName = (param) => {
@@ -918,7 +933,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
                   <ParameterLabel htmlFor="pd-slider" paramKey="pdMultiplier">
                     PD Multiplier: {pdMultiplier.toFixed(2)}x
                   </ParameterLabel>
-                  <span className="text-sm font-medium">{(counterpartyData.pd * pdMultiplier * 100).toFixed(4)}%</span>
+                  <span className="text-sm font-medium">{(safeCounterparty.pd * pdMultiplier * 100).toFixed(4)}%</span>
                 </div>
                 <Slider
                   id="pd-slider"
@@ -936,7 +951,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
                     TTC PD Multiplier: {ttcPdMultiplier.toFixed(2)}x
                   </ParameterLabel>
                   <span className="text-sm font-medium">
-                    {(counterpartyData.ttcPd * ttcPdMultiplier * 100).toFixed(4)}%
+                    {(safeCounterparty.ttcPd * ttcPdMultiplier * 100).toFixed(4)}%
                   </span>
                 </div>
                 <Slider
@@ -955,7 +970,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
                     LGD Multiplier: {lgdMultiplier.toFixed(2)}x
                   </ParameterLabel>
                   <span className="text-sm font-medium">
-                    {(counterpartyData.lgd * lgdMultiplier * 100).toFixed(2)}%
+                    {(safeCounterparty.lgd * lgdMultiplier * 100).toFixed(2)}%
                   </span>
                 </div>
                 <Slider
@@ -974,7 +989,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
                     EAD Multiplier: {eadMultiplier.toFixed(2)}x
                   </ParameterLabel>
                   <span className="text-sm font-medium">
-                    ${Math.round(counterpartyData.ead * eadMultiplier).toLocaleString()}
+                    ${Math.round(safeCounterparty.ead * eadMultiplier).toLocaleString()}
                   </span>
                 </div>
                 <Slider
@@ -1394,7 +1409,7 @@ export function SensitivityAnalysis({ counterpartyData }) {
                 <div className="text-sm text-muted-foreground">
                   {useRatingPd
                     ? `Using credit rating PD: ${(getPdFromRating(selectedRating) * 100).toFixed(4)}%`
-                    : `Using model TTC PD: ${(counterpartyData.ttcPd * 100).toFixed(4)}%`}
+                    : `Using model TTC PD: ${(safeCounterparty.ttcPd * 100).toFixed(4)}%`}
                 </div>
               </div>
             </CardContent>

@@ -30,7 +30,7 @@ interface ModuleDetailProps {
   onUpdateCounterparty: (updatedData: any) => void
 }
 
-export function ModuleDetail({ moduleId, onClose, counterpartyData, onUpdateCounterparty }: ModuleDetailProps) {
+export function ModuleDetail({ moduleId, onClose, counterpartyData = {}, onUpdateCounterparty }: ModuleDetailProps) {
   const moduleDetails = getModuleDetails(moduleId, counterpartyData)
   const moduleDescription = getModuleDescription(moduleId)
   const moduleCode = getModuleCode(moduleId)
@@ -330,6 +330,11 @@ export function ModuleDetail({ moduleId, onClose, counterpartyData, onUpdateCoun
   const findActualFieldKey = (inputName: string): string | null => {
     const possibleKey = getFieldKey(inputName)
 
+    // Check if counterpartyData is undefined
+    if (!counterpartyData) {
+      return null
+    }
+
     // Check if the key exists directly
     if (possibleKey in counterpartyData) {
       return possibleKey
@@ -450,7 +455,7 @@ export function ModuleDetail({ moduleId, onClose, counterpartyData, onUpdateCoun
                     const inputValue = input.value
                     const inputDesc = input.description || ""
                     const fieldKey = findActualFieldKey(inputName)
-                    const rawValue = fieldKey ? counterpartyData[fieldKey] : undefined
+                    const rawValue = fieldKey && counterpartyData ? counterpartyData[fieldKey] : undefined
                     const isBoolean = typeof rawValue === "boolean" || isBooleanField(inputName)
                     const isNumerical = isNumericalField(inputName, rawValue)
                     const hasDropdown = shouldUseDropdown(inputName) || isBoolean

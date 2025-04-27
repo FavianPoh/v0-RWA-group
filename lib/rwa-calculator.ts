@@ -4,12 +4,26 @@
 const BASEL_CONFIDENCE_LEVEL = 0.999 // 99.9% confidence level
 const NORMAL_INVERSE_CONFIDENCE = normalInverse(BASEL_CONFIDENCE_LEVEL)
 
-export function calculateRWA(counterparty) {
-  // Get the appropriate PD based on whether we're using credit rating or calculated PD
-  const pd =
-    counterparty.useCredRatingPd && counterparty.creditRating
-      ? counterparty.creditRatingPd
-      : counterparty.ttcPd || counterparty.pd
+// Find the calculateRWA function and add null checks for counterparty
+export function calculateRWA(counterparty, options = {}) {
+  // Add null check for counterparty
+  if (!counterparty) {
+    console.error("Counterparty is undefined in calculateRWA")
+    return {
+      rwa: 0,
+      k: 0,
+      correlationR: 0,
+      maturityAdjustment: 0,
+      riskWeight: 0,
+    }
+  }
+
+  // Add null checks for counterparty properties using optional chaining and nullish coalescing
+  const useCredRatingPd = counterparty.useCredRatingPd ?? false
+  const pd = useCredRatingPd ? (counterparty.creditRating?.pd ?? 0.01) : (counterparty.pd ?? 0.01)
+  const lgd = counterparty.lgd ?? 0.45
+  const ead = counterparty.ead ?? 1000000
+  const maturity = counterparty.maturity ?? 2.5
 
   // Determine if AVC multiplier should be applied (Basel Cre31)
   const avcMultiplier = determineAVCMultiplier(counterparty)
@@ -20,14 +34,14 @@ export function calculateRWA(counterparty) {
   // Apply AVC multiplier to correlation according to Basel CRE31
   const correlation = baseCorrelation * avcMultiplier
 
-  // Calculate maturity adjustment
-  const maturityAdjustment = calculateMaturityAdjustment(pd, counterparty.maturity)
+  // Calculate maturity adjustment (with default value if maturity is undefined)
+  const maturityAdjustment = calculateMaturityAdjustment(pd, maturity)
 
   // Calculate capital requirement (K)
-  const k = calculateCapitalRequirement(pd, counterparty.lgd, correlation, maturityAdjustment)
+  const k = calculateCapitalRequirement(pd, lgd, correlation, maturityAdjustment)
 
   // Calculate RWA
-  const rwa = counterparty.ead * k * 12.5
+  const rwa = ead * k * 12.5
 
   return {
     pd,
@@ -42,6 +56,9 @@ export function calculateRWA(counterparty) {
 
 // Determine if AVC multiplier should be applied (Basel Cre31)
 function determineAVCMultiplier(counterparty) {
+  // Add null checks
+  if (!counterparty) return 1.0
+
   // According to Basel CRE31.43, correlation is multiplied by 1.25 for:
   // - Exposures to financial institutions with assets ≥ $100bn
   // - Exposures to unregulated financial institutions regardless of size
