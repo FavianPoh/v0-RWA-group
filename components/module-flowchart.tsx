@@ -11,9 +11,11 @@ import ReactFlow, {
   useEdgesState,
   MarkerType,
   Position,
+  Handle,
 } from "reactflow"
 import "reactflow/dist/style.css"
 import { ModuleDetail } from "./module-detail"
+import { calculateRWA } from "@/lib/rwa-calculator"
 
 // Custom node component
 const ModuleNode = ({ data }: { data: any }) => {
@@ -21,9 +23,15 @@ const ModuleNode = ({ data }: { data: any }) => {
     <div
       className={`p-3 rounded-lg shadow-md border ${
         data.isActive ? "bg-blue-50 border-blue-300" : "bg-white border-gray-200"
-      }`}
+      } ${data.isModified ? "ring-2 ring-purple-400" : ""}`}
       style={{ width: 180 }}
     >
+      {/* Add handles for connections */}
+      <Handle type="target" position={Position.Left} style={{ background: "#555" }} />
+      <Handle type="target" position={Position.Top} style={{ background: "#555" }} />
+      <Handle type="source" position={Position.Right} style={{ background: "#555" }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: "#555" }} />
+
       <div className="font-medium text-center">{data.label}</div>
       {data.value !== undefined && (
         <div className="mt-1 text-center text-sm">
@@ -46,7 +54,7 @@ interface ModuleFlowchartProps {
   onModuleSelect: (moduleId: string) => void
   onCreditReview: () => void
   modifiedModules?: string[]
-  onUpdateModule?: (moduleId: string, newData: any) => void
+  onUpdateCounterparty?: (updatedData: any) => void
 }
 
 const modulesData = [
@@ -184,10 +192,11 @@ export function ModuleFlowchart({
   onModuleSelect,
   onCreditReview,
   modifiedModules = [],
-  onUpdateModule,
+  onUpdateCounterparty,
 }: ModuleFlowchartProps) {
   const [selectedModule, setSelectedModule] = useState<string | null>(null)
   const [isModuleDetailOpen, setIsModuleDetailOpen] = useState(false)
+  const [previewResults, setPreviewResults] = useState<any>(null)
 
   // Define node positions in a more structured layout
   const nodePositions = {
@@ -310,15 +319,82 @@ export function ModuleFlowchart({
     [setNodes, onCreditReview],
   )
 
-  const onModuleUpdate = (newData) => {
-    if (selectedModule && onUpdateModule) {
-      onUpdateModule(selectedModule, newData)
+  const handleModuleUpdate = (updatedData) => {
+    if (selectedModule && onUpdateCounterparty) {
+      // Calculate new results based on updated data
+      const tempData = { ...data, ...updatedData }
+      const newResults = calculateRWA(tempData)
+
+      // Update the node display with new results
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id === selectedModule) {
+            return { ...n, data: { ...n.data, isModified: true } }
+          } else if (
+            n.id === "avc" &&
+            (updatedData.isFinancial !== undefined ||
+              updatedData.isLargeFinancial !== undefined ||
+              updatedData.isRegulated !== undefined)
+          ) {
+            // Update AVC node if financial status changed
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                value: newResults.avcMultiplier.toFixed(2) + "x",
+              },
+            }
+          } else if (
+            n.id === "correlation" &&
+            (updatedData.isFinancial !== undefined ||
+              updatedData.isLargeFinancial !== undefined ||
+              updatedData.isRegulated !== undefined)
+          ) {
+            // Update correlation node if financial status changed
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                value: (newResults.correlation * 100).toFixed(2) + "%",
+              },
+            }
+          } else if (n.id === "rwa") {
+            // Always update RWA node with new results
+            const finalRwa = newResults.rwa
+            const hasAdjustment =
+              newResults.hasAdjustment || newResults.hasPortfolioAdjustment || newResults.originalRwa
+            let displayValue = `$${Math.round(finalRwa).toLocaleString()}`
+
+            if (hasAdjustment) {
+              const originalRwa = newResults.originalRwa || newResults.rwa
+              const adjustmentPercentage = (finalRwa / originalRwa - 1) * 100
+              displayValue = `$${Math.round(finalRwa).toLocaleString()} (${adjustmentPercentage >= 0 ? "+" : ""}${adjustmentPercentage.toFixed(1)}%)`
+            }
+
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                value: displayValue,
+              },
+            }
+          }
+          return n
+        }),
+      )
+
+      // Pass the updated data to the parent component
+      onUpdateCounterparty(updatedData)
+
+      // Store preview results for display
+      setPreviewResults(newResults)
     }
   }
 
   const handleCloseModuleDetail = () => {
     setIsModuleDetailOpen(false)
     setSelectedModule(null)
+    setPreviewResults(null)
     setNodes((nds) =>
       nds.map((n) => {
         return { ...n, data: { ...n.data, isActive: false } }
@@ -351,7 +427,7 @@ export function ModuleFlowchart({
                 <ModuleDetail
                   moduleId={selectedModule}
                   counterpartyData={data}
-                  onUpdateCounterparty={onModuleUpdate}
+                  onUpdateCounterparty={handleModuleUpdate}
                   onClose={handleCloseModuleDetail}
                 />
               )}

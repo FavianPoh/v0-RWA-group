@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ModuleFlowchart } from "@/components/module-flowchart"
-import { ModuleDetail } from "@/components/module-detail"
 import { SensitivityAnalysis } from "@/components/sensitivity-analysis"
 import { CreditReviewDialog } from "@/components/credit-review-dialog"
 import { RWAPortfolioDashboard } from "@/components/rwa-portfolio-dashboard"
@@ -125,6 +124,21 @@ export function RWADashboard({ data }) {
     if (!modifiedModules.includes(moduleId)) {
       setModifiedModules([...modifiedModules, moduleId])
     }
+  }
+
+  // Handle updating counterparty data from the flowchart
+  const handleUpdateCounterparty = (updatedData) => {
+    const updatedCounterparties = counterparties.map((c) => {
+      if (c.id === selectedCounterparty) {
+        return {
+          ...c,
+          ...updatedData,
+        }
+      }
+      return c
+    })
+
+    setCounterparties(updatedCounterparties)
   }
 
   // Add handler for RWA adjustments at counterparty level
@@ -454,6 +468,7 @@ export function RWADashboard({ data }) {
                               onModuleSelect={setSelectedModule}
                               onCreditReview={handleCreditReview}
                               modifiedModules={modifiedModules}
+                              onUpdateCounterparty={handleUpdateCounterparty}
                             />
                           </CardContent>
                         </Card>
@@ -471,15 +486,6 @@ export function RWADashboard({ data }) {
             <RWAPortfolioDashboard counterparties={counterparties} onEadUpdate={handleEadUpdate} />
           </TabsContent>
         </Tabs>
-
-        {selectedModule && (
-          <ModuleDetail
-            moduleId={selectedModule}
-            counterpartyData={counterpartyData}
-            onUpdateCounterparty={(updatedData) => handleModuleSave(updatedData, selectedModule)}
-            onClose={() => setSelectedModule(null)}
-          />
-        )}
 
         {showCreditReview && (
           <CreditReviewDialog
