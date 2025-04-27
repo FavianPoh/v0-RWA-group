@@ -28,7 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { AdjustmentHeatmap } from "@/components/adjustment-heatmap"
 
-export function RWAPortfolioDashboard({ counterparties, onEadUpdate }) {
+export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCounterparty }) {
   const [targetRWA, setTargetRWA] = useState("")
   const [chartView, setChartView] = useState("industry")
 

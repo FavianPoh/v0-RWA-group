@@ -50,8 +50,14 @@ export function RWADashboard() {
 
   // Handle counterparty selection
   const handleSelectCounterparty = (counterparty) => {
-    console.log("Selecting counterparty:", counterparty.name)
-    setSelectedCounterparty(counterparty)
+    console.log("Selecting counterparty:", counterparty.name, counterparty.id)
+    // Force a new object reference to ensure React detects the state change
+    const counterpartyCopy = JSON.parse(JSON.stringify(counterparty))
+    setSelectedCounterparty(counterpartyCopy)
+    // Immediately calculate new RWA results
+    const newResults = calculateRWA(counterpartyCopy)
+    console.log("New RWA results:", newResults)
+    setRwaResults(newResults)
   }
 
   // Handle credit review completion
@@ -198,6 +204,11 @@ export function RWADashboard() {
     setRwaResults(calculateRWA(updatedCounterparty))
   }
 
+  // Debug effect to log selected counterparty changes
+  useEffect(() => {
+    console.log("Selected counterparty state updated:", selectedCounterparty.name, selectedCounterparty.id)
+  }, [selectedCounterparty])
+
   return (
     <TooltipProvider>
       <div className="container mx-auto py-6">
@@ -210,15 +221,19 @@ export function RWADashboard() {
           {/* Add counterparty selector */}
           <div className="w-64">
             <Select
-              value={selectedCounterparty.id}
+              defaultValue={selectedCounterparty.id}
               onValueChange={(value) => {
+                console.log("Select value changed to:", value)
                 const counterparty = counterparties.find((cp) => cp.id === value)
                 if (counterparty) {
+                  console.log("Found counterparty:", counterparty.name)
                   handleSelectCounterparty(counterparty)
+                } else {
+                  console.error("Counterparty not found for ID:", value)
                 }
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Counterparty" />
               </SelectTrigger>
               <SelectContent>
