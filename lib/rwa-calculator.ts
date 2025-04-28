@@ -14,7 +14,7 @@ export function calculateRWA(counterparty) {
 
   // Extract parameters from counterparty
   const {
-    pd: rawPd,
+    pd: rawPitPd,
     ttcPd: rawTtcPd,
     lgd: rawLgd,
     ead: rawEad,
@@ -29,23 +29,24 @@ export function calculateRWA(counterparty) {
   } = counterparty || {}
 
   // Ensure we have numeric values with fallbacks
-  const pd = useCredRatingPd && creditRatingPd ? ensureNumber(creditRatingPd) : ensureNumber(rawTtcPd || rawPd)
+  const pitPd = ensureNumber(rawPitPd, 0.01) // Default PIT PD of 1% if not provided
+  const ttcPd = useCredRatingPd && creditRatingPd ? ensureNumber(creditRatingPd) : ensureNumber(rawTtcPd || rawPitPd)
   const lgd = ensureNumber(rawLgd, 0.45) // Default LGD of 45% if not provided
   const ead = ensureNumber(rawEad, 0)
   const maturity = ensureNumber(rawMaturity, 2.5) // Default maturity of 2.5 years if not provided
 
   // Calculate correlation using Basel formula
-  const baseCorrelation = calculateBaseCorrelation(pd)
+  const baseCorrelation = calculateBaseCorrelation(ttcPd)
 
   // Apply AVC multiplier for financial institutions
   const avcMultiplier = calculateAVCMultiplier(isFinancial, isLargeFinancial, isRegulated)
   const correlation = baseCorrelation * avcMultiplier
 
   // Calculate maturity adjustment
-  const maturityAdjustment = calculateMaturityAdjustment(pd, maturity)
+  const maturityAdjustment = calculateMaturityAdjustment(ttcPd, maturity)
 
   // Calculate capital requirement (K)
-  const k = calculateCapitalRequirement(pd, lgd, correlation, maturityAdjustment)
+  const k = calculateCapitalRequirement(ttcPd, lgd, correlation, maturityAdjustment)
 
   // Calculate RWA
   const baseRWA = k * 12.5 * ead
@@ -138,7 +139,8 @@ export function calculateRWA(counterparty) {
 
   // Log the calculation for debugging
   console.log("RWA Calculation results:", {
-    pd,
+    pitPd,
+    ttcPd,
     lgd,
     ead,
     correlation,
@@ -153,7 +155,8 @@ export function calculateRWA(counterparty) {
 
   // Return the results
   return {
-    pd,
+    pd: pitPd,
+    ttcPd,
     lgd,
     ead,
     baseCorrelation,

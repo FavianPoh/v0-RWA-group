@@ -17,7 +17,7 @@ function formatNumber(value) {
 // Helper function to format percentages consistently
 function formatPercentage(value) {
   if (value === undefined || value === null || isNaN(value)) return "N/A"
-  return typeof value === "number" ? `${(value * 100).toFixed(2)}%` : value.toString()
+  return typeof value === "number" ? `${(value * 100).toFixed(4)}%` : value.toString()
 }
 
 // Helper function to format decimal values with more precision
@@ -63,6 +63,10 @@ export function ModuleFlowchart({
     hasAdjustment,
     rwaDensity = 0.1,
   } = rwaResults || {}
+
+  // Get the actual PIT PD and TTC PD values from the counterparty data
+  const pitPd = counterparty?.pd || pd
+  const actualTtcPd = counterparty?.ttcPd || ttcPd
 
   // Ensure all values are valid numbers
   const safeRwa = isNaN(rwa) ? 0 : rwa
@@ -125,8 +129,16 @@ export function ModuleFlowchart({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Input Modules */}
         <div className="space-y-4">
-          {renderModule("pd", "PD Module", pd, "percentage", true, false, modifiedModules.includes("pd"))}
-          {renderModule("ttcpd", "TTC PD Module", ttcPd, "percentage", true, false, modifiedModules.includes("ttcpd"))}
+          {renderModule("pd", "PIT PD Module", pitPd, "percentage", true, false, modifiedModules.includes("pd"))}
+          {renderModule(
+            "ttcpd",
+            "TTC PD Module",
+            actualTtcPd,
+            "percentage",
+            true,
+            false,
+            modifiedModules.includes("ttcpd"),
+          )}
           {renderModule("lgd", "LGD Module", lgd, "percentage", true, false, modifiedModules.includes("lgd"))}
           {renderModule("ead", "EAD Module", ead, "currency", true, false, modifiedModules.includes("ead"))}
         </div>

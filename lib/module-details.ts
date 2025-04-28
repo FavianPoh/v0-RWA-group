@@ -8,7 +8,7 @@ export function getModuleDetails(moduleId, data, results) {
   const safeResults = results || {}
 
   if (moduleId === "pd") {
-    return getPDModuleDetails(safeData)
+    return getPITPDModuleDetails(safeData)
   } else if (moduleId === "ttcpd") {
     return getTtcPDModuleDetails(safeData)
   } else if (moduleId === "creditreview") {
@@ -30,9 +30,12 @@ export function getModuleDetails(moduleId, data, results) {
   }
 }
 
-function getPDModuleDetails(data) {
+function getPITPDModuleDetails(data) {
+  // Ensure we have a valid PIT PD value
+  const pitPd = data.pd !== undefined && !isNaN(data.pd) ? data.pd : 0.01
+
   return {
-    title: "Point-in-Time Probability of Default (PD) Calculator",
+    title: "Point-in-Time Probability of Default (PIT PD) Calculator",
     description:
       "Calculates the probability that a counterparty will default within a one-year period based on current conditions",
     overview:
@@ -66,22 +69,17 @@ function getPDModuleDetails(data) {
         rawValue: data.macroeconomicIndex,
         description: "Current state of the economy (higher values indicate stronger economy)",
       },
-      {
-        name: "PD",
-        value: data.pd ? (data.pd * 100).toFixed(4) + "%" : "N/A",
-        rawValue: data.pd,
-        description: "Point-in-Time Probability of Default",
-      },
     ],
     outputs: [
       {
         name: "PIT PD",
-        value: data.pd ? (data.pd * 100).toFixed(4) + "%" : "N/A",
+        value: pitPd ? (pitPd * 100).toFixed(4) + "%" : "N/A",
+        rawValue: pitPd,
         description: "Point-in-Time Probability of Default over a one-year period",
       },
       {
         name: "Equivalent Rating",
-        value: data.pd ? getRatingFromPd(data.pd) : "N/A",
+        value: pitPd ? getRatingFromPd(pitPd) : "N/A",
         description: "Approximate credit rating equivalent to this PD",
       },
     ],
@@ -97,6 +95,9 @@ function getTtcPDModuleDetails(data) {
     longTermAverage: data.longTermAverage,
     cyclicality: data.cyclicality,
   }
+
+  // Ensure we have a valid TTC PD value
+  const ttcPd = data.ttcPd !== undefined && !isNaN(data.ttcPd) ? data.ttcPd : 0.01
 
   return {
     title: "Through-The-Cycle (TTC) Probability of Default Calculator",
@@ -135,17 +136,12 @@ function getTtcPDModuleDetails(data) {
         rawValue: data.cyclicality,
         description: "How sensitive the industry is to economic cycles (0-1)",
       },
-      {
-        name: "TTC PD",
-        value: data.ttcPd ? (data.ttcPd * 100).toFixed(4) + "%" : "N/A",
-        rawValue: data.ttcPd,
-        description: "Through-The-Cycle Probability of Default",
-      },
     ],
     outputs: [
       {
         name: "TTC PD",
-        value: data.ttcPd ? (data.ttcPd * 100).toFixed(4) + "%" : "N/A",
+        value: ttcPd ? (ttcPd * 100).toFixed(4) + "%" : "N/A",
+        rawValue: ttcPd,
         description: "Through-The-Cycle Probability of Default",
       },
       {
@@ -158,7 +154,7 @@ function getTtcPDModuleDetails(data) {
       },
       {
         name: "Equivalent Rating",
-        value: data.ttcPd ? getRatingFromPd(data.ttcPd) : "N/A",
+        value: ttcPd ? getRatingFromPd(ttcPd) : "N/A",
         description: "Approximate credit rating equivalent to this TTC PD",
       },
     ],

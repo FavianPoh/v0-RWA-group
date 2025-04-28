@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RWA Model Dashboard - Product Requirements Document</title>
+  <link rel="stylesheet" href="prd-styles.css">
+</head>
+<body>
+  <div id="content"></div>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    // Fetch the markdown file
+    fetch('RWA_Model_Dashboard_PRD.md')
+      .then(response => response.text())
+      .then(markdown => {
+        // Convert markdown to HTML
+        document.getElementById('content').innerHTML = marked.parse(markdown);
+        
+        // Add print button
+        const printButton = document.createElement('button');
+        printButton.textContent = 'Print / Save as PDF';
+        printButton.style.padding = '10px 15px';
+        printButton.style.backgroundColor = '#2563eb';
+        printButton.style.color = 'white';
+        printButton.style.border = 'none';
+        printButton.style.borderRadius = '4px';
+        printButton.style.cursor = 'pointer';
+        printButton.style.marginTop = '20px';
+        printButton.style.fontWeight = 'bold';
+        
+        printButton.addEventListener('click', () => {
+          window.print();
+        });
+        
+        document.body.insertBefore(printButton, document.body.firstChild);
+      });
+  </script>
+  <style>
+    @media print {
+      button {
+        display: none;
+      }
+    }
+  </style>
+</body>
+</html>

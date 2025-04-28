@@ -9,19 +9,25 @@ export function calculateTtcPd(inputs: {
 }): number {
   const { pointInTimePd, macroeconomicIndex, longTermAverage, cyclicality } = inputs
 
+  // Check for invalid inputs and provide defaults
+  const safePd = isNaN(pointInTimePd) ? 0.01 : pointInTimePd
+  const safeIndex = isNaN(macroeconomicIndex) ? 0.5 : macroeconomicIndex
+  const safeAverage = isNaN(longTermAverage) ? 0.02 : longTermAverage
+  const safeCyclicality = isNaN(cyclicality) ? 0.5 : cyclicality
+
   // Calculate economic adjustment factor
   // When economy is strong (index close to 1), PIT PD is lower than TTC PD
   // When economy is weak (index close to 0), PIT PD is higher than TTC PD
-  const economicDeviation = 0.5 - macroeconomicIndex // Deviation from neutral economy
+  const economicDeviation = 0.5 - safeIndex // Deviation from neutral economy
 
   // Calculate adjustment based on cyclicality and economic conditions
-  const adjustment = 1 + economicDeviation * cyclicality * 2
+  const adjustment = 1 + economicDeviation * safeCyclicality * 2
 
   // Calculate TTC PD by adjusting PIT PD with the economic cycle
-  let ttcPd = pointInTimePd * adjustment
+  let ttcPd = safePd * adjustment
 
   // Blend with long-term average to ensure stability
-  ttcPd = ttcPd * 0.7 + longTermAverage * 0.3
+  ttcPd = ttcPd * 0.7 + safeAverage * 0.3
 
   // Ensure PD is within reasonable bounds
   return Math.max(0.0001, Math.min(1, ttcPd))
