@@ -15,6 +15,7 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
+  Scatter,
 } from "recharts"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,34 @@ import { Input } from "@/components/ui/input"
 import { RotateCcw, Target } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+
+// Custom tooltip component to highlight baseline and target values
+const CustomTooltip = ({ active, payload, label, formatParameterValue, baselineValue, targetValue }) => {
+  if (active && payload && payload.length) {
+    const isBaseline = Math.abs(label - baselineValue) < 0.0000001
+    const isTarget = targetValue !== null && Math.abs(label - targetValue) < 0.0000001
+
+    return (
+      <div className="bg-white p-3 border rounded shadow-lg">
+        <p className="font-medium text-sm">
+          {formatParameterValue(label)}
+          {isBaseline && " (Baseline)"}
+          {isTarget && " (Target)"}
+        </p>
+        {payload.map((entry, index) => (
+          <p key={index} className="text-sm" style={{ color: entry.color }}>
+            {`${entry.name}: ${
+              entry.name === "RWA" ? `$${Math.round(entry.value).toLocaleString()}` : `${entry.value.toFixed(2)}%`
+            }`}
+          </p>
+        ))}
+        {isBaseline && <div className="mt-1 pt-1 border-t text-xs text-gray-500">Current baseline value</div>}
+        {isTarget && <div className="mt-1 pt-1 border-t text-xs text-gray-500">Target analysis value</div>}
+      </div>
+    )
+  }
+  return null
+}
 
 // Update the component to include target value functionality
 export function SensitivityAnalysis({ counterparty }) {
@@ -35,6 +64,8 @@ export function SensitivityAnalysis({ counterparty }) {
   const [customRangeValues, setCustomRangeValues] = useState("")
   const [sensitivityData, setSensitivityData] = useState([])
   const [baselineRWA, setBaselineRWA] = useState(0)
+  const [baselinePoint, setBaselinePoint] = useState(null)
+  const [targetPoint, setTargetPoint] = useState(null)
 
   // New state for target value functionality
   const [showTarget, setShowTarget] = useState(false)
@@ -65,6 +96,17 @@ export function SensitivityAnalysis({ counterparty }) {
     const baselineResult = calculateRWA(counterparty)
     setBaselineRWA(baselineResult.rwa)
 
+    // Create baseline point data
+    const baselinePointData = {
+      parameterValue: baselineValue,
+      rwa: baselineResult.rwa,
+      rwaDensity: baselineResult.rwaDensity * 100,
+      change: 0,
+      k: baselineResult.k * 100,
+      isBaseline: true,
+    }
+    setBaselinePoint(baselinePointData)
+
     let dataPoints = []
 
     if (customRange && customRangeValues.trim()) {
@@ -94,6 +136,7 @@ export function SensitivityAnalysis({ counterparty }) {
           rwaDensity: result.rwaDensity * 100,
           change: ((result.rwa - baselineResult.rwa) / baselineResult.rwa) * 100,
           k: result.k * 100,
+          isBaseline: Math.abs(value - baselineValue) < 0.0000001,
         }
       })
     } else {
@@ -126,8 +169,16 @@ export function SensitivityAnalysis({ counterparty }) {
           rwaDensity: result.rwaDensity * 100,
           change: ((result.rwa - baselineResult.rwa) / baselineResult.rwa) * 100,
           k: result.k * 100,
+          isBaseline: Math.abs(value - baselineValue) < 0.0000001,
         }
       })
+    }
+
+    // Ensure baseline is included in the data points
+    if (!dataPoints.some((point) => Math.abs(point.parameterValue - baselineValue) < 0.0000001)) {
+      dataPoints.push(baselinePointData)
+      // Sort the data points by parameter value
+      dataPoints.sort((a, b) => a.parameterValue - b.parameterValue)
     }
 
     setSensitivityData(dataPoints)
@@ -176,6 +227,7 @@ export function SensitivityAnalysis({ counterparty }) {
     if (!showTarget || !targetValue || targetValue.trim() === "") {
       setTargetRWA(null)
       setTargetImpact(null)
+      setTargetPoint(null)
       return
     }
 
@@ -184,6 +236,7 @@ export function SensitivityAnalysis({ counterparty }) {
     if (parsedValue === null || isNaN(parsedValue)) {
       setTargetRWA(null)
       setTargetImpact(null)
+      setTargetPoint(null)
       return
     }
 
@@ -192,12 +245,25 @@ export function SensitivityAnalysis({ counterparty }) {
 
     try {
       const result = calculateRWA(modifiedCounterparty)
+      const impact = ((result.rwa - baselineRWA) / baselineRWA) * 100
+
       setTargetRWA(result.rwa)
-      setTargetImpact(((result.rwa - baselineRWA) / baselineRWA) * 100)
+      setTargetImpact(impact)
+
+      // Create target point data
+      setTargetPoint({
+        parameterValue: parsedValue,
+        rwa: result.rwa,
+        rwaDensity: result.rwaDensity * 100,
+        change: impact,
+        k: result.k * 100,
+        isTarget: true,
+      })
     } catch (error) {
       console.error("Error calculating target RWA:", error)
       setTargetRWA(null)
       setTargetImpact(null)
+      setTargetPoint(null)
     }
   }, [showTarget, targetValue, counterparty, selectedParameter, baselineRWA, parseParameterValue])
 
@@ -216,6 +282,7 @@ export function SensitivityAnalysis({ counterparty }) {
     setTargetValue("")
     setTargetRWA(null)
     setTargetImpact(null)
+    setTargetPoint(null)
   }, [selectedParameter])
 
   // Format parameter value for display
@@ -296,6 +363,24 @@ export function SensitivityAnalysis({ counterparty }) {
   const handleCustomRangeChange = useCallback((e) => {
     setCustomRangeValues(e.target.value)
   }, [])
+
+  // Prepare chart data with baseline and target points
+  const chartData = useMemo(() => {
+    const data = [...sensitivityData]
+
+    // Ensure baseline point is included
+    if (baselinePoint && !data.some((point) => point.isBaseline)) {
+      data.push(baselinePoint)
+    }
+
+    // Add target point if it exists and isn't already in the data
+    if (targetPoint && !data.some((point) => point.isTarget)) {
+      data.push(targetPoint)
+    }
+
+    // Sort by parameter value
+    return data.sort((a, b) => a.parameterValue - b.parameterValue)
+  }, [sensitivityData, baselinePoint, targetPoint])
 
   return (
     <div className="space-y-6">
@@ -526,13 +611,15 @@ export function SensitivityAnalysis({ counterparty }) {
                       key={index}
                       variant={point.change > 0 ? "outline" : "secondary"}
                       className={`${
-                        point.change > 0
-                          ? "bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-300"
-                          : "bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-300"
+                        point.isBaseline
+                          ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-blue-400"
+                          : point.change > 0
+                            ? "bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-300"
+                            : "bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-300"
                       }`}
                     >
-                      {formatParameterValue(point.parameterValue)}: {point.change > 0 ? "+" : ""}
-                      {point.change.toFixed(2)}%
+                      {formatParameterValue(point.parameterValue)}
+                      {point.isBaseline ? " (Baseline)" : `: ${point.change > 0 ? "+" : ""}${point.change.toFixed(2)}%`}
                     </Badge>
                   ))}
                 </div>
@@ -561,7 +648,7 @@ export function SensitivityAnalysis({ counterparty }) {
                 <ChartWrapper>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart
-                      data={sensitivityData}
+                      data={chartData}
                       margin={{
                         top: 5,
                         right: 30,
@@ -584,22 +671,27 @@ export function SensitivityAnalysis({ counterparty }) {
                         label={{ value: "RWA", angle: -90, position: "insideLeft" }}
                       />
                       <Tooltip
-                        formatter={(value) => [`$${Math.round(value).toLocaleString()}`, "RWA"]}
-                        labelFormatter={formatParameterValue}
+                        content={
+                          <CustomTooltip
+                            formatParameterValue={formatParameterValue}
+                            baselineValue={selectedParameterDetails.baseline}
+                            targetValue={targetPoint?.parameterValue || null}
+                          />
+                        }
                       />
                       <Legend />
                       <ReferenceLine
                         x={selectedParameterDetails.baseline}
-                        stroke="#ff0000"
+                        stroke="#3b82f6"
                         strokeDasharray="3 3"
-                        label={{ value: "Baseline", position: "top", fill: "#ff0000" }}
+                        label={{ value: "Baseline", position: "top", fill: "#3b82f6" }}
                       />
-                      {showTarget && targetValue && (
+                      {showTarget && targetPoint && (
                         <ReferenceLine
-                          x={parseParameterValue(targetValue)}
-                          stroke="#00aa00"
+                          x={targetPoint.parameterValue}
+                          stroke="#10b981"
                           strokeDasharray="3 3"
-                          label={{ value: "Target", position: "top", fill: "#00aa00" }}
+                          label={{ value: "Target", position: "top", fill: "#10b981" }}
                         />
                       )}
                       <Line
@@ -610,6 +702,46 @@ export function SensitivityAnalysis({ counterparty }) {
                         activeDot={{ r: 8 }}
                         strokeWidth={2}
                       />
+                      {/* Highlight baseline point */}
+                      <Scatter
+                        name="Baseline"
+                        dataKey="rwa"
+                        data={[baselinePoint].filter(Boolean)}
+                        fill="#3b82f6"
+                        shape="circle"
+                        legendType="none"
+                      >
+                        {baselinePoint && (
+                          <Scatter
+                            cx={baselinePoint.parameterValue}
+                            cy={baselinePoint.rwa}
+                            r={8}
+                            fill="#3b82f6"
+                            stroke="#ffffff"
+                            strokeWidth={2}
+                          />
+                        )}
+                      </Scatter>
+                      {/* Highlight target point if it exists */}
+                      {targetPoint && (
+                        <Scatter
+                          name="Target"
+                          dataKey="rwa"
+                          data={[targetPoint]}
+                          fill="#10b981"
+                          shape="circle"
+                          legendType="none"
+                        >
+                          <Scatter
+                            cx={targetPoint.parameterValue}
+                            cy={targetPoint.rwa}
+                            r={8}
+                            fill="#10b981"
+                            stroke="#ffffff"
+                            strokeWidth={2}
+                          />
+                        </Scatter>
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                 </ChartWrapper>
@@ -620,7 +752,7 @@ export function SensitivityAnalysis({ counterparty }) {
                 <ChartWrapper>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart
-                      data={sensitivityData}
+                      data={chartData}
                       margin={{
                         top: 5,
                         right: 30,
@@ -643,22 +775,27 @@ export function SensitivityAnalysis({ counterparty }) {
                         label={{ value: "RWA Density", angle: -90, position: "insideLeft" }}
                       />
                       <Tooltip
-                        formatter={(value) => [`${value.toFixed(2)}%`, "RWA Density"]}
-                        labelFormatter={formatParameterValue}
+                        content={
+                          <CustomTooltip
+                            formatParameterValue={formatParameterValue}
+                            baselineValue={selectedParameterDetails.baseline}
+                            targetValue={targetPoint?.parameterValue || null}
+                          />
+                        }
                       />
                       <Legend />
                       <ReferenceLine
                         x={selectedParameterDetails.baseline}
-                        stroke="#ff0000"
+                        stroke="#3b82f6"
                         strokeDasharray="3 3"
-                        label={{ value: "Baseline", position: "top", fill: "#ff0000" }}
+                        label={{ value: "Baseline", position: "top", fill: "#3b82f6" }}
                       />
-                      {showTarget && targetValue && (
+                      {showTarget && targetPoint && (
                         <ReferenceLine
-                          x={parseParameterValue(targetValue)}
-                          stroke="#00aa00"
+                          x={targetPoint.parameterValue}
+                          stroke="#10b981"
                           strokeDasharray="3 3"
-                          label={{ value: "Target", position: "top", fill: "#00aa00" }}
+                          label={{ value: "Target", position: "top", fill: "#10b981" }}
                         />
                       )}
                       <Line
@@ -669,6 +806,46 @@ export function SensitivityAnalysis({ counterparty }) {
                         activeDot={{ r: 8 }}
                         strokeWidth={2}
                       />
+                      {/* Highlight baseline point */}
+                      <Scatter
+                        name="Baseline"
+                        dataKey="rwaDensity"
+                        data={[baselinePoint].filter(Boolean)}
+                        fill="#3b82f6"
+                        shape="circle"
+                        legendType="none"
+                      >
+                        {baselinePoint && (
+                          <Scatter
+                            cx={baselinePoint.parameterValue}
+                            cy={baselinePoint.rwaDensity}
+                            r={8}
+                            fill="#3b82f6"
+                            stroke="#ffffff"
+                            strokeWidth={2}
+                          />
+                        )}
+                      </Scatter>
+                      {/* Highlight target point if it exists */}
+                      {targetPoint && (
+                        <Scatter
+                          name="Target"
+                          dataKey="rwaDensity"
+                          data={[targetPoint]}
+                          fill="#10b981"
+                          shape="circle"
+                          legendType="none"
+                        >
+                          <Scatter
+                            cx={targetPoint.parameterValue}
+                            cy={targetPoint.rwaDensity}
+                            r={8}
+                            fill="#10b981"
+                            stroke="#ffffff"
+                            strokeWidth={2}
+                          />
+                        </Scatter>
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                 </ChartWrapper>
@@ -679,7 +856,7 @@ export function SensitivityAnalysis({ counterparty }) {
                 <ChartWrapper>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart
-                      data={sensitivityData}
+                      data={chartData}
                       margin={{
                         top: 5,
                         right: 30,
@@ -702,22 +879,27 @@ export function SensitivityAnalysis({ counterparty }) {
                         label={{ value: "Capital Requirement (K)", angle: -90, position: "insideLeft" }}
                       />
                       <Tooltip
-                        formatter={(value) => [`${value.toFixed(2)}%`, "Capital Requirement"]}
-                        labelFormatter={formatParameterValue}
+                        content={
+                          <CustomTooltip
+                            formatParameterValue={formatParameterValue}
+                            baselineValue={selectedParameterDetails.baseline}
+                            targetValue={targetPoint?.parameterValue || null}
+                          />
+                        }
                       />
                       <Legend />
                       <ReferenceLine
                         x={selectedParameterDetails.baseline}
-                        stroke="#ff0000"
+                        stroke="#3b82f6"
                         strokeDasharray="3 3"
-                        label={{ value: "Baseline", position: "top", fill: "#ff0000" }}
+                        label={{ value: "Baseline", position: "top", fill: "#3b82f6" }}
                       />
-                      {showTarget && targetValue && (
+                      {showTarget && targetPoint && (
                         <ReferenceLine
-                          x={parseParameterValue(targetValue)}
-                          stroke="#00aa00"
+                          x={targetPoint.parameterValue}
+                          stroke="#10b981"
                           strokeDasharray="3 3"
-                          label={{ value: "Target", position: "top", fill: "#00aa00" }}
+                          label={{ value: "Target", position: "top", fill: "#10b981" }}
                         />
                       )}
                       <Line
@@ -728,6 +910,46 @@ export function SensitivityAnalysis({ counterparty }) {
                         activeDot={{ r: 8 }}
                         strokeWidth={2}
                       />
+                      {/* Highlight baseline point */}
+                      <Scatter
+                        name="Baseline"
+                        dataKey="k"
+                        data={[baselinePoint].filter(Boolean)}
+                        fill="#3b82f6"
+                        shape="circle"
+                        legendType="none"
+                      >
+                        {baselinePoint && (
+                          <Scatter
+                            cx={baselinePoint.parameterValue}
+                            cy={baselinePoint.k}
+                            r={8}
+                            fill="#3b82f6"
+                            stroke="#ffffff"
+                            strokeWidth={2}
+                          />
+                        )}
+                      </Scatter>
+                      {/* Highlight target point if it exists */}
+                      {targetPoint && (
+                        <Scatter
+                          name="Target"
+                          dataKey="k"
+                          data={[targetPoint]}
+                          fill="#10b981"
+                          shape="circle"
+                          legendType="none"
+                        >
+                          <Scatter
+                            cx={targetPoint.parameterValue}
+                            cy={targetPoint.k}
+                            r={8}
+                            fill="#10b981"
+                            stroke="#ffffff"
+                            strokeWidth={2}
+                          />
+                        </Scatter>
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                 </ChartWrapper>
