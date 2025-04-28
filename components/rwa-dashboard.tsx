@@ -268,300 +268,303 @@ export function RWADashboard() {
 
   return (
     <TooltipProvider>
-      <div className="container mx-auto py-6">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">RWA Calculator</h1>
-            <p className="text-muted-foreground">Basel III Risk-Weighted Assets calculation based on IRB approach</p>
-          </div>
-
-          {/* Add counterparty selector */}
-          <div className="w-64">
-            <Select value={selectedCounterpartyId} onValueChange={handleCounterpartyChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select Counterparty" />
-              </SelectTrigger>
-              <SelectContent>
-                {counterparties.map((cp) => (
-                  <SelectItem key={cp.id} value={cp.id}>
-                    {cp.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <Tabs defaultValue="counterparty" className="space-y-4">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
-            <TabsTrigger value="counterparty">Counterparty</TabsTrigger>
-            <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
-            <TabsTrigger value="analysis">Analysis</TabsTrigger>
-          </TabsList>
-          <TabsContent value="counterparty" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Selected Counterparty</CardTitle>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    className="h-4 w-4 text-muted-foreground"
-                  >
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{selectedCounterparty.name}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedCounterparty.industry} | {selectedCounterparty.region}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">PD (Point-in-Time)</CardTitle>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    className="h-4 w-4 text-muted-foreground"
-                  >
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                  </svg>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{(selectedCounterparty.pd * 100).toFixed(2)}%</div>
-                  <p className="text-xs text-muted-foreground">
-                    Last reviewed:{" "}
-                    {selectedCounterparty.lastReviewDate
-                      ? new Date(selectedCounterparty.lastReviewDate).toLocaleDateString()
-                      : "Not reviewed"}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">RWA</CardTitle>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    className="h-4 w-4 text-muted-foreground"
-                  >
-                    <rect width="20" height="14" x="2" y="5" rx="2" />
-                    <path d="M2 10h20" />
-                  </svg>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">${safeFormatNumber(rwaResults.rwa)}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedCounterparty.rwaAdjustment
-                      ? `Adjusted (${selectedCounterparty.rwaAdjustment.type})`
-                      : selectedCounterparty.portfolioRwaAdjustment
-                        ? "Portfolio adjusted"
-                        : "Base calculation"}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">RWA Density</CardTitle>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    className="h-4 w-4 text-muted-foreground"
-                  >
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                  </svg>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {rwaResults.rwaDensity ? (rwaResults.rwaDensity * 100).toFixed(2) + "%" : "N/A"}
-                  </div>
-                  <p className="text-xs text-muted-foreground">RWA / EAD</p>
-                </CardContent>
-              </Card>
+      {/* Apply the scaled-ui class to the main container */}
+      <div className="scaled-ui">
+        <div className="container mx-auto py-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">RWA Calculator</h1>
+              <p className="text-muted-foreground">Basel III Risk-Weighted Assets calculation based on IRB approach</p>
             </div>
-            {/* Main Content */}
-            <div className="grid gap-4 md:grid-cols-1">
-              <Card className="col-span-1">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>RWA Flowchart</CardTitle>
-                    <div className="flex space-x-2">
-                      <Button variant="outline" onClick={() => setIsCreditReviewOpen(true)}>
-                        Perform Credit Review
-                      </Button>
-                      <Button variant="outline" onClick={() => setIsRWAAdjustmentOpen(true)}>
-                        Adjust Counterparty RWA
+
+            {/* Add counterparty selector */}
+            <div className="w-64">
+              <Select value={selectedCounterpartyId} onValueChange={handleCounterpartyChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Counterparty" />
+                </SelectTrigger>
+                <SelectContent>
+                  {counterparties.map((cp) => (
+                    <SelectItem key={cp.id} value={cp.id}>
+                      {cp.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <Tabs defaultValue="counterparty" className="space-y-4">
+            <TabsList className="grid w-full max-w-md grid-cols-3">
+              <TabsTrigger value="counterparty">Counterparty</TabsTrigger>
+              <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
+              <TabsTrigger value="analysis">Analysis</TabsTrigger>
+            </TabsList>
+            <TabsContent value="counterparty" className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Selected Counterparty</CardTitle>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      className="h-4 w-4 text-muted-foreground"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{selectedCounterparty.name}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedCounterparty.industry} | {selectedCounterparty.region}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">PD (Point-in-Time)</CardTitle>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      className="h-4 w-4 text-muted-foreground"
+                    >
+                      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{(selectedCounterparty.pd * 100).toFixed(2)}%</div>
+                    <p className="text-xs text-muted-foreground">
+                      Last reviewed:{" "}
+                      {selectedCounterparty.lastReviewDate
+                        ? new Date(selectedCounterparty.lastReviewDate).toLocaleDateString()
+                        : "Not reviewed"}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">RWA</CardTitle>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      className="h-4 w-4 text-muted-foreground"
+                    >
+                      <rect width="20" height="14" x="2" y="5" rx="2" />
+                      <path d="M2 10h20" />
+                    </svg>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">${safeFormatNumber(rwaResults.rwa)}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedCounterparty.rwaAdjustment
+                        ? `Adjusted (${selectedCounterparty.rwaAdjustment.type})`
+                        : selectedCounterparty.portfolioRwaAdjustment
+                          ? "Portfolio adjusted"
+                          : "Base calculation"}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">RWA Density</CardTitle>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      className="h-4 w-4 text-muted-foreground"
+                    >
+                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                    </svg>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {rwaResults.rwaDensity ? (rwaResults.rwaDensity * 100).toFixed(2) + "%" : "N/A"}
+                    </div>
+                    <p className="text-xs text-muted-foreground">RWA / EAD</p>
+                  </CardContent>
+                </Card>
+              </div>
+              {/* Main Content */}
+              <div className="grid gap-4 md:grid-cols-1">
+                <Card className="col-span-1">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>RWA Flowchart</CardTitle>
+                      <div className="flex space-x-2">
+                        <Button variant="outline" onClick={() => setIsCreditReviewOpen(true)}>
+                          Perform Credit Review
+                        </Button>
+                        <Button variant="outline" onClick={() => setIsRWAAdjustmentOpen(true)}>
+                          Adjust Counterparty RWA
+                        </Button>
+                      </div>
+                    </div>
+                    <CardDescription>
+                      Select a module to view details. Calculated for {selectedCounterparty.name}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ModuleFlowchart
+                      counterparty={selectedCounterparty}
+                      rwaResults={rwaResults}
+                      onSelectModule={(module) => {
+                        setSelectedModule(module)
+                        setIsDetailOpen(true)
+                      }}
+                      onCreditReview={() => setIsCreditReviewOpen(true)}
+                      modifiedModules={selectedCounterparty?.modifiedModules || []}
+                      onUpdateCounterparty={handleCounterpartyUpdate}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+            <TabsContent value="portfolio" className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-1">
+                <Card className="col-span-1">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Portfolio Overview</CardTitle>
+                      <Button onClick={() => setShowPortfolioAdjustmentDialog(true)}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Adjust Portfolio RWA
                       </Button>
                     </div>
-                  </div>
-                  <CardDescription>
-                    Select a module to view details. Calculated for {selectedCounterparty.name}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ModuleFlowchart
-                    counterparty={selectedCounterparty}
-                    rwaResults={rwaResults}
-                    onSelectModule={(module) => {
-                      setSelectedModule(module)
-                      setIsDetailOpen(true)
-                    }}
-                    onCreditReview={() => setIsCreditReviewOpen(true)}
-                    modifiedModules={selectedCounterparty?.modifiedModules || []}
-                    onUpdateCounterparty={handleCounterpartyUpdate}
-                  />
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-          <TabsContent value="portfolio" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-1">
-              <Card className="col-span-1">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Portfolio Overview</CardTitle>
-                    <Button onClick={() => setShowPortfolioAdjustmentDialog(true)}>
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Adjust Portfolio RWA
-                    </Button>
-                  </div>
-                  <CardDescription>Counterparties and their current RWA values</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <RWAPortfolioDashboard
-                    counterparties={counterparties}
-                    selectedCounterparty={selectedCounterparty}
-                    onSelectCounterparty={handleSelectCounterparty}
-                    onEadUpdate={(updatedCounterparties) => {
-                      setCounterparties(updatedCounterparties)
-                      const updatedSelected = updatedCounterparties.find((cp) => cp.id === selectedCounterparty.id)
-                      if (updatedSelected) {
-                        setSelectedCounterparty(updatedSelected)
-                        setRwaResults(calculateRWA(updatedSelected))
-                      }
-                    }}
-                  />
-                </CardContent>
-              </Card>
-            </div>
+                    <CardDescription>Counterparties and their current RWA values</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <RWAPortfolioDashboard
+                      counterparties={counterparties}
+                      selectedCounterparty={selectedCounterparty}
+                      onSelectCounterparty={handleSelectCounterparty}
+                      onEadUpdate={(updatedCounterparties) => {
+                        setCounterparties(updatedCounterparties)
+                        const updatedSelected = updatedCounterparties.find((cp) => cp.id === selectedCounterparty.id)
+                        if (updatedSelected) {
+                          setSelectedCounterparty(updatedSelected)
+                          setRwaResults(calculateRWA(updatedSelected))
+                        }
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
 
-            <div className="grid gap-4 md:grid-cols-1">
-              <Card className="col-span-1">
-                <CardHeader>
-                  <CardTitle>RWA Adjustment Heatmap</CardTitle>
-                  <CardDescription>
-                    Visualizing the distribution of RWA adjustments across the portfolio
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <AdjustmentHeatmap counterparties={counterparties} />
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-          <TabsContent value="analysis" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-1">
-              <Card className="col-span-1">
-                <CardHeader>
-                  <CardTitle>Sensitivity Analysis</CardTitle>
-                  <CardDescription>
-                    Analyze how changes to key risk parameters affect the final RWA calculation
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <SensitivityAnalysis counterparty={selectedCounterparty} />
-                </CardContent>
-              </Card>
-            </div>
+              <div className="grid gap-4 md:grid-cols-1">
+                <Card className="col-span-1">
+                  <CardHeader>
+                    <CardTitle>RWA Adjustment Heatmap</CardTitle>
+                    <CardDescription>
+                      Visualizing the distribution of RWA adjustments across the portfolio
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <AdjustmentHeatmap counterparties={counterparties} />
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+            <TabsContent value="analysis" className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-1">
+                <Card className="col-span-1">
+                  <CardHeader>
+                    <CardTitle>Sensitivity Analysis</CardTitle>
+                    <CardDescription>
+                      Analyze how changes to key risk parameters affect the final RWA calculation
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <SensitivityAnalysis counterparty={selectedCounterparty} />
+                  </CardContent>
+                </Card>
+              </div>
 
-            <div className="grid gap-4 md:grid-cols-1">
-              <Card className="col-span-1">
-                <CardHeader>
-                  <CardTitle>Module Documentation</CardTitle>
-                  <CardDescription>Technical details and explanations of each calculation module</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ModuleDocumentation />
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
+              <div className="grid gap-4 md:grid-cols-1">
+                <Card className="col-span-1">
+                  <CardHeader>
+                    <CardTitle>Module Documentation</CardTitle>
+                    <CardDescription>Technical details and explanations of each calculation module</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ModuleDocumentation />
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
 
-        {/* Module Detail Dialog */}
-        <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" hideCloseButton={false}>
-            {selectedModule && (
-              <ModuleDetail
-                moduleId={selectedModule}
-                counterpartyData={selectedCounterparty}
-                results={rwaResults}
-                onUpdateCounterparty={handleCounterpartyUpdate}
-                onClose={() => setIsDetailOpen(false)}
+          {/* Module Detail Dialog */}
+          <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto dialog-content" hideCloseButton={false}>
+              {selectedModule && (
+                <ModuleDetail
+                  moduleId={selectedModule}
+                  counterpartyData={selectedCounterparty}
+                  results={rwaResults}
+                  onUpdateCounterparty={handleCounterpartyUpdate}
+                  onClose={() => setIsDetailOpen(false)}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {/* Credit Review Dialog */}
+          <Dialog open={isCreditReviewOpen} onOpenChange={setIsCreditReviewOpen}>
+            <DialogContent className="max-w-3xl dialog-content">
+              <DialogTitle>Credit Review</DialogTitle>
+              <CreditReviewDialog
+                counterparty={selectedCounterparty}
+                onComplete={handleCreditReviewComplete}
+                onCancel={() => setIsCreditReviewOpen(false)}
+                onDiscard={handleDiscardCreditReview}
               />
-            )}
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
 
-        {/* Credit Review Dialog */}
-        <Dialog open={isCreditReviewOpen} onOpenChange={setIsCreditReviewOpen}>
-          <DialogContent className="max-w-3xl">
-            <DialogTitle>Credit Review</DialogTitle>
-            <CreditReviewDialog
-              counterparty={selectedCounterparty}
-              onComplete={handleCreditReviewComplete}
-              onCancel={() => setIsCreditReviewOpen(false)}
-              onDiscard={handleDiscardCreditReview}
-            />
-          </DialogContent>
-        </Dialog>
+          {/* RWA Adjustment Dialog */}
+          <Dialog open={isRWAAdjustmentOpen} onOpenChange={setIsRWAAdjustmentOpen}>
+            <DialogContent className="max-w-3xl dialog-content">
+              <DialogTitle>RWA Adjustment</DialogTitle>
+              <RWAAdjustmentPanel
+                counterparty={selectedCounterparty}
+                onSave={handleRWAAdjustment}
+                onRemove={selectedCounterparty.rwaAdjustment ? handleRemoveRWAAdjustment : null}
+              />
+            </DialogContent>
+          </Dialog>
 
-        {/* RWA Adjustment Dialog */}
-        <Dialog open={isRWAAdjustmentOpen} onOpenChange={setIsRWAAdjustmentOpen}>
-          <DialogContent className="max-w-3xl">
-            <DialogTitle>RWA Adjustment</DialogTitle>
-            <RWAAdjustmentPanel
-              counterparty={selectedCounterparty}
-              onSave={handleRWAAdjustment}
-              onRemove={selectedCounterparty.rwaAdjustment ? handleRemoveRWAAdjustment : null}
-            />
-          </DialogContent>
-        </Dialog>
-
-        {/* Portfolio Adjustment Dialog */}
-        <Dialog open={showPortfolioAdjustmentDialog} onOpenChange={setShowPortfolioAdjustmentDialog}>
-          <DialogContent size="full" className="max-h-[90vh] overflow-y-auto">
-            <PortfolioAdjustmentPanel
-              counterparties={counterparties}
-              onSave={handlePortfolioAdjustment}
-              onRemove={counterparties.some((cp) => cp.portfolioRwaAdjustment) ? removePortfolioAdjustment : null}
-            />
-          </DialogContent>
-        </Dialog>
+          {/* Portfolio Adjustment Dialog */}
+          <Dialog open={showPortfolioAdjustmentDialog} onOpenChange={setShowPortfolioAdjustmentDialog}>
+            <DialogContent size="full" className="max-h-[90vh] overflow-y-auto dialog-content">
+              <PortfolioAdjustmentPanel
+                counterparties={counterparties}
+                onSave={handlePortfolioAdjustment}
+                onRemove={counterparties.some((cp) => cp.portfolioRwaAdjustment) ? removePortfolioAdjustment : null}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
     </TooltipProvider>
   )

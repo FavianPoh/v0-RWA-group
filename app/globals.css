@@ -57,3 +57,17 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Scale down UI by 20% */
+.scaled-ui {
+  transform: scale(0.8);
+  transform-origin: top left;
+  width: 125%; /* 1/0.8 = 1.25 or 125% */
+  height: 125%;
+  margin-bottom: 5rem; /* Add some bottom margin to account for the scaling */
+}
+
+/* Adjust dialog scaling to ensure they remain centered */
+.scaled-ui .dialog-content {
+  transform: scale(1.25); /* Counter the parent scaling to maintain proper size */
+}
