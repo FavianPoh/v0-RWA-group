@@ -10,14 +10,20 @@ import { getModuleExplanation } from "@/lib/module-explanations"
 
 // Helper function to format numbers consistently
 function formatNumber(value) {
-  if (value === undefined || value === null) return "N/A"
+  if (value === undefined || value === null || isNaN(value)) return "N/A"
   return typeof value === "number" ? Math.round(value).toLocaleString() : value.toString()
 }
 
 // Helper function to format percentages consistently
 function formatPercentage(value) {
-  if (value === undefined || value === null) return "N/A"
+  if (value === undefined || value === null || isNaN(value)) return "N/A"
   return typeof value === "number" ? `${(value * 100).toFixed(2)}%` : value.toString()
+}
+
+// Helper function to format decimal values with more precision
+function formatDecimal(value, decimals = 4) {
+  if (value === undefined || value === null || isNaN(value)) return "N/A"
+  return typeof value === "number" ? value.toFixed(decimals) : value.toString()
 }
 
 export function ModuleFlowchart({
@@ -41,7 +47,7 @@ export function ModuleFlowchart({
     }
   }, [hoveredModule])
 
-  // Extract values from results
+  // Extract values from results and ensure they're valid numbers
   const {
     pd = 0.01,
     ttcPd = 0.01,
@@ -58,20 +64,35 @@ export function ModuleFlowchart({
     rwaDensity = 0.1,
   } = rwaResults || {}
 
+  // Ensure all values are valid numbers
+  const safeRwa = isNaN(rwa) ? 0 : rwa
+  const safeOriginalRwa = isNaN(originalRwa) ? safeRwa : originalRwa
+
   // Determine if there's an adjustment and calculate the adjustment amount
-  const hasRwaAdjustment = hasAdjustment || (originalRwa !== undefined && Math.abs(rwa - originalRwa) > 0.01)
-  const adjustmentAmount = hasRwaAdjustment && originalRwa ? rwa - originalRwa : 0
-  const adjustmentPercentage = hasRwaAdjustment && originalRwa ? (rwa / originalRwa - 1) * 100 : 0
+  const hasRwaAdjustment =
+    hasAdjustment || (safeOriginalRwa !== undefined && Math.abs(safeRwa - safeOriginalRwa) > 0.01)
+  const adjustmentAmount = hasRwaAdjustment && safeOriginalRwa ? safeRwa - safeOriginalRwa : 0
+  const adjustmentPercentage =
+    hasRwaAdjustment && safeOriginalRwa && safeOriginalRwa !== 0 ? (safeRwa / safeOriginalRwa - 1) * 100 : 0
 
   // Function to render a module box
   const renderModule = (id, title, value, format = "number", isInput = false, isOutput = false, isModified = false) => {
-    // Format the value based on the specified format
-    const formattedValue =
-      format === "percentage"
-        ? formatPercentage(value)
-        : format === "currency"
-          ? `$${formatNumber(value)}`
-          : formatNumber(value)
+    // Ensure value is a valid number
+    const safeValue = isNaN(value) ? 0 : value
+
+    // Format the value based on the specified format and module ID
+    let formattedValue
+
+    if (id === "avc" || id === "maturity") {
+      // Use more decimal places for AVC and Maturity modules
+      formattedValue = formatDecimal(safeValue, 4)
+    } else if (format === "percentage") {
+      formattedValue = formatPercentage(safeValue)
+    } else if (format === "currency") {
+      formattedValue = `$${formatNumber(safeValue)}`
+    } else {
+      formattedValue = formatNumber(safeValue)
+    }
 
     return (
       <div
@@ -144,7 +165,7 @@ export function ModuleFlowchart({
 
         {/* Output Modules */}
         <div className="space-y-4">
-          {renderModule("rwa", "RWA Module", rwa, "currency", false, true, modifiedModules.includes("rwa"))}
+          {renderModule("rwa", "RWA Module", safeRwa, "currency", false, true, modifiedModules.includes("rwa"))}
           {renderModule(
             "density",
             "RWA Density",
@@ -175,11 +196,11 @@ export function ModuleFlowchart({
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm">
                     <span>Original RWA:</span>
-                    <span>${formatNumber(originalRwa)}</span>
+                    <span>${formatNumber(safeOriginalRwa)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>Adjusted RWA:</span>
-                    <span>${formatNumber(rwa)}</span>
+                    <span>${formatNumber(safeRwa)}</span>
                   </div>
                   <div className="flex justify-between text-sm font-medium">
                     <span>Adjustment:</span>

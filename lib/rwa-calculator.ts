@@ -74,6 +74,10 @@ export function calculateRWA(counterparty) {
       // For multiplicative adjustments, multiply the base RWA by the multiplier
       const multiplier = ensureNumber(rwaAdjustment.multiplier, 1)
       adjustedRWA = baseRWA * multiplier
+    } else if (rwaAdjustment.type === "percentage") {
+      // For percentage adjustments, calculate based on percentage value
+      const percentageValue = ensureNumber(rwaAdjustment.value, 0)
+      adjustedRWA = baseRWA * (1 + percentageValue / 100)
     }
 
     console.log("After counterparty adjustment:", {

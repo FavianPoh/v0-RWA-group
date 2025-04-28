@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,14 +19,70 @@ export function RWAAdjustmentPanel({ counterparty, onSave, onRemove }) {
   const existingAdjustment = counterparty.rwaAdjustment
 
   const [adjustmentType, setAdjustmentType] = useState(existingAdjustment?.type || "percentage")
-  const [adjustmentValue, setAdjustmentValue] = useState(
-    existingAdjustment
-      ? adjustmentType === "percentage"
-        ? (existingAdjustment.adjustedRWA / baselineRWA - 1) * 100
-        : existingAdjustment.adjustedRWA - baselineRWA
-      : "",
-  )
+
+  // Initialize adjustment value with a safe default
+  const getInitialAdjustmentValue = () => {
+    if (!existingAdjustment) return ""
+
+    try {
+      const value =
+        adjustmentType === "percentage"
+          ? (existingAdjustment.adjustedRWA / baselineRWA - 1) * 100
+          : existingAdjustment.adjustedRWA - baselineRWA
+
+      // Check if value is NaN or infinite
+      if (isNaN(value) || !isFinite(value)) return ""
+
+      return value
+    } catch (error) {
+      console.error("Error calculating initial adjustment value:", error)
+      return ""
+    }
+  }
+
+  const [adjustmentValue, setAdjustmentValue] = useState(getInitialAdjustmentValue())
   const [reason, setReason] = useState(existingAdjustment?.reason || "")
+
+  // Update adjustment value when type changes
+  useEffect(() => {
+    if (existingAdjustment) {
+      try {
+        const newValue =
+          adjustmentType === "percentage"
+            ? (existingAdjustment.adjustedRWA / baselineRWA - 1) * 100
+            : existingAdjustment.adjustedRWA - baselineRWA
+
+        // Check if value is NaN or infinite
+        if (isNaN(newValue) || !isFinite(newValue)) {
+          setAdjustmentValue("")
+        } else {
+          setAdjustmentValue(newValue)
+        }
+      } catch (error) {
+        console.error("Error updating adjustment value:", error)
+        setAdjustmentValue("")
+      }
+    }
+  }, [adjustmentType, existingAdjustment, baselineRWA])
+
+  // Handle adjustment value change
+  const handleAdjustmentValueChange = (e) => {
+    const inputValue = e.target.value
+
+    // Allow empty string
+    if (inputValue === "") {
+      setAdjustmentValue("")
+      return
+    }
+
+    // Try to parse as number
+    const numValue = Number.parseFloat(inputValue)
+
+    // Only update if it's a valid number
+    if (!isNaN(numValue) && isFinite(numValue)) {
+      setAdjustmentValue(numValue)
+    }
+  }
 
   // Calculate adjusted RWA based on inputs
   const calculateAdjustedRWA = () => {
@@ -34,7 +90,7 @@ export function RWAAdjustmentPanel({ counterparty, onSave, onRemove }) {
 
     const numValue = Number.parseFloat(adjustmentValue)
 
-    if (isNaN(numValue)) return baselineRWA
+    if (isNaN(numValue) || !isFinite(numValue)) return baselineRWA
 
     if (adjustmentType === "percentage") {
       return baselineRWA * (1 + numValue / 100)
@@ -44,23 +100,50 @@ export function RWAAdjustmentPanel({ counterparty, onSave, onRemove }) {
   }
 
   const adjustedRWA = calculateAdjustedRWA()
-  const percentageChange = (adjustedRWA / baselineRWA - 1) * 100
+
+  // Calculate changes safely
+  const calculatePercentageChange = () => {
+    if (baselineRWA === 0) return 0
+    return (adjustedRWA / baselineRWA - 1) * 100
+  }
+
+  const percentageChange = calculatePercentageChange()
   const absoluteChange = adjustedRWA - baselineRWA
 
   const handleSave = () => {
+    // Validate adjustment value
     if (adjustmentValue === "" || isNaN(Number.parseFloat(adjustmentValue))) {
       return
     }
 
+    const numValue = Number.parseFloat(adjustmentValue)
+
+    // Create the appropriate adjustment structure based on type
     const rwaAdjustment = {
       type: adjustmentType,
-      value: Number.parseFloat(adjustmentValue),
+      value: numValue,
       adjustedRWA,
       reason,
       timestamp: new Date().toISOString(),
     }
 
+    // Add type-specific properties
+    if (adjustmentType === "percentage") {
+      rwaAdjustment.multiplier = 1 + numValue / 100
+    } else if (adjustmentType === "absolute") {
+      rwaAdjustment.adjustment = numValue
+    }
+
+    console.log("Saving RWA adjustment:", rwaAdjustment)
     onSave({ rwaAdjustment })
+  }
+
+  // Format number safely
+  const safeFormatNumber = (value) => {
+    if (value === undefined || value === null || isNaN(value) || !isFinite(value)) {
+      return "0"
+    }
+    return Math.round(value).toLocaleString()
   }
 
   return (
@@ -70,7 +153,7 @@ export function RWAAdjustmentPanel({ counterparty, onSave, onRemove }) {
           <h3 className="text-lg font-medium">Baseline RWA</h3>
           <p className="text-sm text-muted-foreground">Before any adjustments</p>
         </div>
-        <div className="text-2xl font-bold">${Math.round(baselineRWA).toLocaleString()}</div>
+        <div className="text-2xl font-bold">${safeFormatNumber(baselineRWA)}</div>
       </div>
 
       <Separator />
@@ -98,8 +181,8 @@ export function RWAAdjustmentPanel({ counterparty, onSave, onRemove }) {
           {adjustmentType === "absolute" && <span className="mr-2">$</span>}
           <Input
             id="adjustment-value"
-            value={adjustmentValue}
-            onChange={(e) => setAdjustmentValue(e.target.value)}
+            value={adjustmentValue === "" ? "" : adjustmentValue.toString()}
+            onChange={handleAdjustmentValueChange}
             placeholder={adjustmentType === "percentage" ? "e.g. 10 for +10%" : "e.g. 1000000"}
             className="flex-1"
           />
@@ -134,17 +217,17 @@ export function RWAAdjustmentPanel({ counterparty, onSave, onRemove }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <div className="text-sm font-medium">Baseline RWA</div>
-              <div className="text-xl">${Math.round(baselineRWA).toLocaleString()}</div>
+              <div className="text-xl">${safeFormatNumber(baselineRWA)}</div>
             </div>
             <div>
               <div className="text-sm font-medium">Adjusted RWA</div>
-              <div className="text-xl">${Math.round(adjustedRWA).toLocaleString()}</div>
+              <div className="text-xl">${safeFormatNumber(adjustedRWA)}</div>
             </div>
             <div>
               <div className="text-sm font-medium">Absolute Change</div>
               <div className="flex items-center">
                 <span className={absoluteChange >= 0 ? "text-green-600" : "text-red-600"}>
-                  {absoluteChange >= 0 ? "+" : ""}${Math.abs(Math.round(absoluteChange)).toLocaleString()}
+                  {absoluteChange >= 0 ? "+" : ""}${safeFormatNumber(Math.abs(absoluteChange))}
                 </span>
               </div>
             </div>
@@ -160,7 +243,7 @@ export function RWAAdjustmentPanel({ counterparty, onSave, onRemove }) {
                   }`}
                 >
                   {percentageChange >= 0 ? "+" : ""}
-                  {percentageChange.toFixed(2)}%
+                  {isNaN(percentageChange) ? "0.00" : percentageChange.toFixed(2)}%
                 </Badge>
               </div>
             </div>

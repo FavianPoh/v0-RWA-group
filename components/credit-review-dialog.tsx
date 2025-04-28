@@ -20,7 +20,14 @@ export function CreditReviewDialog({
   onDiscard = () => {},
 }) {
   const [rating, setRating] = useState(counterparty?.rating || "BBB")
-  const [pd, setPd] = useState(counterparty?.pd || 0.01)
+
+  // Initialize PD with a safe default
+  const getInitialPd = () => {
+    const pdValue = counterparty?.pd || 0.01
+    return isNaN(pdValue) ? 0.01 : pdValue
+  }
+
+  const [pd, setPd] = useState(getInitialPd())
   const [pdOverride, setPdOverride] = useState(false)
   const [notes, setNotes] = useState("")
   const [error, setError] = useState("")
@@ -34,7 +41,11 @@ export function CreditReviewDialog({
     // Set initial values from counterparty
     if (counterparty) {
       setRating(counterparty.rating || "BBB")
-      setPd(counterparty.pd || 0.01)
+
+      // Ensure PD is a valid number
+      const pdValue = counterparty.pd || 0.01
+      setPd(isNaN(pdValue) ? 0.01 : pdValue)
+
       setPdOverride(counterparty.pdOverride || false)
     }
   }, [counterparty])
@@ -44,7 +55,8 @@ export function CreditReviewDialog({
     if (!pdOverride && creditRatings.length > 0) {
       const selectedRating = creditRatings.find((r) => r.rating === rating)
       if (selectedRating) {
-        setPd(selectedRating.pd)
+        const pdValue = selectedRating.pd
+        setPd(isNaN(pdValue) ? 0.01 : pdValue)
       }
     }
   }, [rating, pdOverride, creditRatings])
@@ -64,7 +76,8 @@ export function CreditReviewDialog({
 
   // Handle PD slider change
   const handlePdSliderChange = (value) => {
-    setPd(value[0])
+    const pdValue = value[0]
+    setPd(isNaN(pdValue) ? 0.01 : pdValue)
   }
 
   // Handle save
@@ -127,6 +140,7 @@ export function CreditReviewDialog({
 
   // Format PD as percentage
   const formatPdPercentage = (value) => {
+    if (isNaN(value)) return "0.0000%"
     return `${(value * 100).toFixed(4)}%`
   }
 
@@ -206,7 +220,14 @@ export function CreditReviewDialog({
                 <Label htmlFor="pd">Probability of Default (PD)</Label>
                 <span className="text-sm font-medium">{formatPdPercentage(pd)}</span>
               </div>
-              <Slider id="pd" min={0.0001} max={0.2} step={0.0001} value={[pd]} onValueChange={handlePdSliderChange} />
+              <Slider
+                id="pd"
+                min={0.0001}
+                max={0.2}
+                step={0.0001}
+                value={[isNaN(pd) ? 0.01 : pd]}
+                onValueChange={handlePdSliderChange}
+              />
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>0.01%</span>
                 <span>20%</span>
@@ -219,7 +240,7 @@ export function CreditReviewDialog({
                   min={0}
                   max={1}
                   step={0.0001}
-                  value={pd}
+                  value={isNaN(pd) ? "0.01" : pd}
                   onChange={(e) => handlePdChange(e.target.value)}
                 />
               </div>

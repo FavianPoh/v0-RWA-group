@@ -11,8 +11,10 @@ export function AdjustmentHeatmap({ counterparties }) {
     const byIndustry = {}
     const byRegion = {}
 
-    // Filter only counterparties with adjustments
-    const adjustedCounterparties = counterparties.filter((cp) => cp.hasAdjustment)
+    // Filter only counterparties with adjustments (either type)
+    const adjustedCounterparties = counterparties.filter(
+      (cp) => cp.hasAdjustment || cp.hasCounterpartyAdjustment || cp.hasPortfolioAdjustment,
+    )
 
     // Group by industry
     adjustedCounterparties.forEach((cp) => {

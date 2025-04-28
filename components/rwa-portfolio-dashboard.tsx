@@ -92,12 +92,18 @@ export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCou
       const totalAdjustment = adjustedRWA - baselineRWA
       const hasAdjustment = Math.abs(totalAdjustment) > 0.01 // Use a small threshold to account for floating point errors
 
+      // Check if this counterparty has any type of adjustment
+      const hasCounterpartyAdjustment = cp.rwaAdjustment !== undefined
+      const hasPortfolioAdjustment = cp.portfolioRwaAdjustment !== undefined
+
       // Debug log to check RWA calculation results
       console.log(`Counterparty ${cp.name} RWA calculation:`, {
         baselineRWA,
         adjustedRWA,
         totalAdjustment,
         hasAdjustment,
+        hasCounterpartyAdjustment,
+        hasPortfolioAdjustment,
         result,
       })
 
@@ -115,6 +121,8 @@ export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCou
         baselineRWA: baselineRWA,
         rwa: adjustedRWA,
         hasAdjustment,
+        hasCounterpartyAdjustment,
+        hasPortfolioAdjustment,
         totalAdjustment: totalAdjustment,
         adjustmentPercentage: baselineRWA > 0 ? (adjustedRWA / baselineRWA - 1) * 100 : 0,
         rwaDensity: cp.ead > 0 ? (adjustedRWA / cp.ead) * 100 : 0,
@@ -226,7 +234,8 @@ export function RWAPortfolioDashboard({ counterparties, onEadUpdate, onSelectCou
       regionData,
       hasAdjustments: Math.abs(totalBaselineRWA - totalRwa) > 0.01, // Use a small threshold
       totalAdjustmentPercentage: totalBaselineRWA > 0 ? (totalRwa / totalBaselineRWA - 1) * 100 : 0,
-      adjustedCounterparties: rwaResults.filter((cp) => cp.hasAdjustment).length,
+      adjustedCounterparties: rwaResults.filter((cp) => cp.hasCounterpartyAdjustment || cp.hasPortfolioAdjustment)
+        .length,
       totalCounterparties: rwaResults.length,
     }
   }, [counterparties, eadAdjustments])

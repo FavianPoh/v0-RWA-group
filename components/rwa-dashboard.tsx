@@ -41,6 +41,8 @@ export function RWADashboard() {
   const [isRWAAdjustmentOpen, setIsRWAAdjustmentOpen] = useState(false)
   const [isPortfolioAdjustmentOpen, setIsPortfolioAdjustmentOpen] = useState(false)
   const [selectedCounterpartyId, setSelectedCounterpartyId] = useState(initialSelectedCounterparty.id)
+  const [portfolioAdjustment, setPortfolioAdjustment] = useState(null)
+  const [showPortfolioAdjustmentDialog, setShowPortfolioAdjustmentDialog] = useState(false)
 
   // Recalculate RWA when selected counterparty changes
   useEffect(() => {
@@ -115,13 +117,13 @@ export function RWADashboard() {
 
   // Handle RWA adjustment
   const handleRWAAdjustment = useCallback(
-    (adjustmentData) => {
-      console.log("Applying RWA adjustment:", adjustmentData)
+    ({ rwaAdjustment }) => {
+      console.log("Applying RWA adjustment:", rwaAdjustment)
 
       // Update selected counterparty with adjustment
       const updatedCounterparty = {
         ...selectedCounterparty,
-        rwaAdjustment: adjustmentData,
+        rwaAdjustment: rwaAdjustment,
       }
 
       // Update counterparties list
@@ -146,44 +148,34 @@ export function RWADashboard() {
     [counterparties, selectedCounterparty],
   )
 
-  // Handle Portfolio adjustment
+  // Handle portfolio RWA adjustment
   const handlePortfolioAdjustment = useCallback(
-    (adjustmentData) => {
-      console.log("Applying portfolio adjustment:", adjustmentData)
+    ({ portfolioAdjustment, counterpartyAdjustments }) => {
+      // Update counterparties with portfolio adjustments
+      const updatedCounterparties = [...counterparties]
 
-      // Extract the data
-      const { portfolioAdjustment, counterpartyAdjustments } = adjustmentData
-
-      // Update each counterparty in the adjustments
-      const updatedCounterparties = counterparties.map((cp) => {
-        const adjustment = counterpartyAdjustments.find((adj) => adj.id === cp.id)
-        if (adjustment) {
-          return {
-            ...cp,
-            portfolioRwaAdjustment: {
-              ...portfolioAdjustment,
-              counterpartyAdjustment: adjustment,
-            },
+      // Apply adjustments to each affected counterparty
+      counterpartyAdjustments.forEach((adjustment) => {
+        const counterpartyIndex = updatedCounterparties.findIndex((cp) => cp.id === adjustment.id)
+        if (counterpartyIndex !== -1) {
+          // Create a new object to ensure React detects the change
+          updatedCounterparties[counterpartyIndex] = {
+            ...updatedCounterparties[counterpartyIndex],
+            portfolioRwaAdjustment: adjustment.portfolioRwaAdjustment,
           }
         }
-        return cp
       })
 
-      // Find the updated selected counterparty
-      const updatedSelectedCounterparty = updatedCounterparties.find((cp) => cp.id === selectedCounterparty.id)
+      // Store the portfolio adjustment in state
+      setPortfolioAdjustment(portfolioAdjustment)
 
-      // Update state
+      // Update the counterparties state
       setCounterparties(updatedCounterparties)
-      setSelectedCounterparty(updatedSelectedCounterparty || selectedCounterparty)
 
-      // Calculate new RWA results with the adjustment
-      const newResults = calculateRWA(updatedSelectedCounterparty || selectedCounterparty)
-      console.log("New RWA results after portfolio adjustment:", newResults)
-      setRwaResults(newResults)
-
-      setIsPortfolioAdjustmentOpen(false)
+      // Close the dialog
+      setShowPortfolioAdjustmentDialog(false)
     },
-    [counterparties, selectedCounterparty],
+    [counterparties],
   )
 
   // Handle removing RWA adjustment
@@ -214,31 +206,23 @@ export function RWADashboard() {
     setIsRWAAdjustmentOpen(false)
   }, [counterparties, selectedCounterparty])
 
-  // Handle removing portfolio adjustment
-  const handleRemovePortfolioAdjustment = useCallback(() => {
-    console.log("Removing portfolio adjustment")
-
-    // Update counterparties list by removing portfolio adjustments
+  // Remove portfolio RWA adjustment
+  const removePortfolioAdjustment = useCallback(() => {
+    // Remove portfolio adjustments from all counterparties
     const updatedCounterparties = counterparties.map((cp) => {
-      const updatedCp = { ...cp }
-      delete updatedCp.portfolioRwaAdjustment
-      return updatedCp
+      const { portfolioRwaAdjustment, ...rest } = cp
+      return rest
     })
 
-    // Find the updated selected counterparty
-    const updatedSelectedCounterparty = updatedCounterparties.find((cp) => cp.id === selectedCounterparty.id)
+    // Clear the portfolio adjustment state
+    setPortfolioAdjustment(null)
 
-    // Update state
+    // Update the counterparties state
     setCounterparties(updatedCounterparties)
-    setSelectedCounterparty(updatedSelectedCounterparty)
 
-    // Calculate new RWA results without the adjustment
-    const newResults = calculateRWA(updatedSelectedCounterparty)
-    console.log("New RWA results after removing portfolio adjustment:", newResults)
-    setRwaResults(newResults)
-
-    setIsPortfolioAdjustmentOpen(false)
-  }, [counterparties, selectedCounterparty])
+    // Close the dialog
+    setShowPortfolioAdjustmentDialog(false)
+  }, [counterparties])
 
   // Handle counterparty update from module detail
   const handleCounterpartyUpdate = useCallback(
@@ -460,7 +444,7 @@ export function RWADashboard() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle>Portfolio Overview</CardTitle>
-                    <Button onClick={() => setIsPortfolioAdjustmentOpen(true)}>
+                    <Button onClick={() => setShowPortfolioAdjustmentDialog(true)}>
                       <PlusCircle className="mr-2 h-4 w-4" />
                       Adjust Portfolio RWA
                     </Button>
@@ -569,12 +553,12 @@ export function RWADashboard() {
         </Dialog>
 
         {/* Portfolio Adjustment Dialog */}
-        <Dialog open={isPortfolioAdjustmentOpen} onOpenChange={setIsPortfolioAdjustmentOpen}>
+        <Dialog open={showPortfolioAdjustmentDialog} onOpenChange={setShowPortfolioAdjustmentDialog}>
           <DialogContent size="full" className="max-h-[90vh] overflow-y-auto">
             <PortfolioAdjustmentPanel
               counterparties={counterparties}
               onSave={handlePortfolioAdjustment}
-              onRemove={counterparties.some((cp) => cp.portfolioRwaAdjustment) ? handleRemovePortfolioAdjustment : null}
+              onRemove={counterparties.some((cp) => cp.portfolioRwaAdjustment) ? removePortfolioAdjustment : null}
             />
           </DialogContent>
         </Dialog>

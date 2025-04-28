@@ -99,9 +99,9 @@ export function calculateRWA(counterparty, options = {}) {
 
     if (Math.abs(q) <= 0.42) {
       r = q * q
-      \
-      return q * (((a5 * r + a4) * r + a3) * r + a2) * r + a1
-      ) / (((((b5 * r + b4) * r + b3) * r + b2) * r + b1) * r + 1)
+      return (
+        (q * (((a5 * r + a4) * r + a3) * r + a2) * r + a1) / (((((b5 * r + b4) * r + b3) * r + b2) * r + b1) * r + 1)
+      )
     } else {
       if (q <= 0) r = p
       else r = 1 - p
@@ -142,10 +142,32 @@ export function calculateRWA(counterparty, options = {}) {
 
   // Calculate risk weight and RWA
   const riskWeight = k * 12.5 * 100 // Convert to percentage
-  const rwa = effectiveEad * k * 12.5
+  let rwa = effectiveEad * k * 12.5
+
+  // Store the original RWA before any adjustments
+  const originalRwa = rwa
+
+  // Apply counterparty-specific RWA adjustment if it exists
+  if (counterparty.rwaAdjustment) {
+    if (counterparty.rwaAdjustment.type === "multiplicative") {
+      rwa *= counterparty.rwaAdjustment.multiplier
+    } else if (counterparty.rwaAdjustment.type === "additive") {
+      rwa += counterparty.rwaAdjustment.adjustment
+    }
+  }
+
+  // Apply portfolio-level RWA adjustment if it exists
+  if (counterparty.portfolioRwaAdjustment) {
+    if (counterparty.portfolioRwaAdjustment.type === "multiplicative") {
+      rwa *= counterparty.portfolioRwaAdjustment.multiplier
+    } else if (counterparty.portfolioRwaAdjustment.type === "additive") {
+      rwa += counterparty.portfolioRwaAdjustment.adjustment
+    }
+  }
 
   return {
     rwa,
+    originalRwa,
     k,
     correlationR,
     maturityAdjustment,
@@ -157,5 +179,3 @@ export function calculateRWA(counterparty, options = {}) {
     ttcPd,
   }
 }
-
-// Include any other functions from the original file

@@ -222,7 +222,7 @@ export function PortfolioAdjustmentPanel({ counterparties, onSave, onRemove }) {
         return {
           id: cp.id,
           baselineRWA: cp.baselineRWA,
-          ...adjustmentData,
+          portfolioRwaAdjustment: adjustmentData, // Make sure we're using portfolioRwaAdjustment
           percentageChange: cp.percentageChange,
         }
       })
